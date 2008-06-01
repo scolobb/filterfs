@@ -1,0 +1,13 @@
+FILTERFS TRANSLATOR
+
+WHAT'S THIS?
+filterfs is a GNU/Hurd translator that filters the contents of the directory it 
+is set upon according to the result of execution of a given command.
+
+WHAT'S IT FOR?
+This translator is intended as a preparatory exercise for the namespace-based 
+translator selection project (see http://www.bddebian.com/~wiki/community/gsoc/), 
+so it does not really have a stand-alone importance :-)
+
+DEVELOPER
+Sergiu Ivanov <unlimitedscolobb@gmail.com>

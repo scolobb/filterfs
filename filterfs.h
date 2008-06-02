@@ -3,6 +3,8 @@
 /*----------------------------------------------------------------------------*/
 /*The definitions for the filtering translator*/
 /*----------------------------------------------------------------------------*/
+#ifndef __FILTERFS_H__
+#define __FILTERFS_H__
 
 /*----------------------------------------------------------------------------*/
 #include <stddef.h>
@@ -17,6 +19,8 @@
 #include <sys/time.h>
 #include <hurd/ihash.h>
 #include <hurd/iohelp.h>
+/*----------------------------------------------------------------------------*/
+#include "node.h"
 /*----------------------------------------------------------------------------*/
 
 /*----------------------------------------------------------------------------*/
@@ -143,26 +147,6 @@ struct filterfs_dir
 		bulk_stat_bast_stamp + 2 * BULK_STAT_PERIOD]*/
 	unsigned bulk_stat_count_second_half;
 	};/*struct filterfs_dir*/
-/*----------------------------------------------------------------------------*/
-/*The libnetfs node structure*/
-struct netnode
-	{
-	/*the filtered filesystem*/
-	struct filterfs * fs;
-	
-	/*the directory entry for this node*/
-	struct filterfs_dir_entry * dir_entry;
-	
-	/*the path in the filesystem this file corresponds to*/
-	const char * path;
-	
-	/*the contents of the directory, if the current node is a directory indeed;
-	  0 otherwise*/
-	struct filterfs_dir * dir;
-
-	/*the previous and the next nodes in the node cache*/
-	/*these won't be needed, probably*/
-	};/*struct netnode*/
 /*----------------------------------------------------------------------------*/
 /*A particular filesystem*/
 struct filterfs
@@ -460,3 +444,4 @@ netfs_node_norefs
 	struct node * node
 	);
 /*----------------------------------------------------------------------------*/
+#endif

@@ -411,6 +411,9 @@ main
 	err = node_create_root(&netfs_root_node);
 	if(err)
 		error(EXIT_FAILURE, err, "Failed to create the root node");
+
+	/*Obtain the bootstrap port*/
+	task_get_bootstrap_port(mach_task_self(), &bootstrap_port);
 	
 	/*Return success*/
 	return 0;

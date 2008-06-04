@@ -52,11 +52,28 @@ typedef struct lnode lnode_t;
 
 /*----------------------------------------------------------------------------*/
 /*--------Functions-----------------------------------------------------------*/
+/*----------------------------------------------------------------------------*/
+/*Creates a new lnode with `name`; the new node is locked and contains
+a single reference*/
+error_t
+lnode_create
+	(
+	char * name,
+	lnode_t ** node	/*put the result here*/
+	);
+/*----------------------------------------------------------------------------*/
 /*Adds a reference to the `lnode` (which must be locked)*/
 void
 lnode_ref_add
 	(
 	lnode_t * node
+	);
+/*----------------------------------------------------------------------------*/
+/*Destroys the given lnode*/
+void
+lnode_destroy
+	(
+	lnode_t * node	/*destroy this*/
 	);
 /*----------------------------------------------------------------------------*/
 #endif

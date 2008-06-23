@@ -29,20 +29,13 @@ extern struct argp argp_startup;
 /*The argp parser for rutime arguments*/
 extern struct argp argp_runtime;
 /*----------------------------------------------------------------------------*/
+/*The number of nodes in cache (see ncache.{c,h})*/
+extern int ncache_size;
+/*----------------------------------------------------------------------------*/
 /*The filtering command*/
-char * property = NULL;
+extern char * property;
 /*----------------------------------------------------------------------------*/
-
+/*The directory to filter*/
+extern char * dir;
 /*----------------------------------------------------------------------------*/
-/*--------Functions-----------------------------------------------------------*/
-/*Argp parser function for the common options*/
-static
-error_t
-argp_parse_common_options
-	(
-	int key,
-	char * arg,
-	struct argp_state * state
-	);
-/*----------------------------------------------------------------------------*/
-#endif
+#endif /*__OPTIONS_H__*/

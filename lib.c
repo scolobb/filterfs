@@ -7,6 +7,8 @@
 /*----------------------------------------------------------------------------*/
 #define _GNU_SOURCE 1
 /*----------------------------------------------------------------------------*/
+#include <sys/mman.h>
+/*----------------------------------------------------------------------------*/
 #include "lib.h"
 /*----------------------------------------------------------------------------*/
 
@@ -20,12 +22,13 @@ dir_entries_get
 	char ** dirent_data,					/*the list of directory entries as returned
 																	by dir_readdir*/
 	size_t * dirent_data_size,		/*the size of `dirent_data`*/
-	struct dirent *** dirent_list /*the array of dirents*/
+	struct dirent *** dirent_list /*the array of pointers to beginnings of
+																	dirents in dirent_data*/
 	)
 	{
-	error_t err;
+	error_t err = 0;
 	
-	/*The data returned by dir_readdir*/
+	/*The data (array of dirents(?)) returned by dir_readdir*/
 	char * data;
 	
 	/*The size of `data`*/
@@ -53,7 +56,32 @@ dir_entries_get
 		munmap(data, data_size);
 		
 		/*return the corresponding error*/
-		return err;
+		return ENOMEM;
 		}
+		
+	/*The current directory entry*/
+	struct dirent * dp;
+	int i;
+	
+	/*Go through every element of the list of dirents*/
+	for
+		(
+		i = 0, dp = (struct dirent *)data;
+		i < entries_num;
+		++i, dp = (struct dirent * )((char *)dp + dp->d_reclen)
+		)
+		/*add the current dirent to the list*/
+		*(list + i) = dp;
+	
+	/*Nullify the last element of the list*/
+	*(list + i) = NULL;
+	
+	/*Copy the required values in the parameters*/
+	*dirent_data 			= data;
+	*dirent_data_size	= data_size;
+	*dirent_list 			= list;
+	
+	/*Return success*/
+	return err;
 	}/*dir_entries_get*/
 /*----------------------------------------------------------------------------*/

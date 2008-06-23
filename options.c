@@ -16,6 +16,36 @@
 /*----------------------------------------------------------------------------*/
 
 /*----------------------------------------------------------------------------*/
+/*--------Macros--------------------------------------------------------------*/
+/*Short documentation for argp*/
+#define ARGS_DOC	"DIR"
+#define DOC 			"Shows the contents of DIR filtered according to PROPERTY. If DIR is not specified, ~/ is assumed."
+/*----------------------------------------------------------------------------*/
+
+/*----------------------------------------------------------------------------*/
+/*--------Forward Declarations------------------------------------------------*/
+/*Argp parser function for the common options*/
+static
+error_t
+argp_parse_common_options
+	(
+	int key,
+	char * arg,
+	struct argp_state * state
+	);
+/*----------------------------------------------------------------------------*/
+/*Argp parser function for the startup options*/
+static
+error_t
+argp_parse_startup_options
+	(
+	int key,
+	char * arg,
+	struct argp_state * state
+	);
+/*----------------------------------------------------------------------------*/
+
+/*----------------------------------------------------------------------------*/
 /*--------Global Variables----------------------------------------------------*/
 /*This variable is set to a non-zero value after the parsing of starup options
 	is finished*/
@@ -27,10 +57,10 @@ static int parsing_startup_options_finished;
 /*Argp options common to both the runtime and the startup parser*/
 static const struct argp_option argp_common_options[] =
 	{
-	{OPT_LONG_CACHE_SIZE, OPT_CACHE_SIZE, "[size]", 0,
-		"specify the maximal number of nodes in the node cache"},
-	{OPT_LONG_PROPERTY, OPT_PROPERTY, "[property]", 0,
-		"specify a command which will act as a filter"}
+	{OPT_LONG_CACHE_SIZE, OPT_CACHE_SIZE, "SIZE", 0,
+		"The maximal number of nodes in the node cache"},
+	{OPT_LONG_PROPERTY, OPT_PROPERTY, "PROPERTY", 0,
+		"The command which will act as a filter"}
 	};
 /*----------------------------------------------------------------------------*/
 /*Argp options only meaningful for startupp parsing*/
@@ -38,6 +68,48 @@ static const struct argp_option argp_startup_options[] =
 	{
 	{0}
 	};
+/*----------------------------------------------------------------------------*/
+/*Argp parser for only the common options*/
+static const struct argp argp_parser_common_options =
+	{argp_common_options, argp_parse_common_options, 0, 0, 0};
+/*----------------------------------------------------------------------------*/
+/*Argp parser for only the startup options*/
+static const struct argp argp_parser_startup_options =
+	{argp_startup_options, argp_parse_startup_options, 0, 0, 0};
+/*----------------------------------------------------------------------------*/
+/*The list of children parsers for runtime arguments*/
+static const struct argp_child argp_children_runtime[] =
+	{
+	{&argp_parser_common_options},
+	{&netfs_std_runtime_argp},
+	{0}
+	};
+/*----------------------------------------------------------------------------*/
+/*The list of children parsers for startup arguments*/
+static const struct argp_child argp_children_startup[] =
+	{
+	{&argp_parser_startup_options},
+	{&argp_parser_common_options},
+	{&netfs_std_startup_argp},
+	{0}
+	};
+/*----------------------------------------------------------------------------*/
+/*The version of the server for argp*/
+const char * argp_program_version = "0.0";
+/*----------------------------------------------------------------------------*/
+/*The arpg parser for runtime arguments*/
+struct argp argp_runtime =
+	{0, 0, 0, 0, argp_children_runtime};
+/*----------------------------------------------------------------------------*/
+/*The argp parser for startup arguments*/
+struct argp argp_startup =
+	{0, 0, ARGS_DOC, DOC, argp_children_startup};
+/*----------------------------------------------------------------------------*/
+/*The filtering command*/
+char * property = NULL;
+/*----------------------------------------------------------------------------*/
+/*The directory to filter*/
+char * dir = NULL;
 /*----------------------------------------------------------------------------*/
 
 /*----------------------------------------------------------------------------*/
@@ -52,6 +124,8 @@ argp_parse_common_options
 	struct argp_state * state
 	)
 	{
+	error_t err = 0;
+	
 	/*Go through the possible options*/
 	switch(key)
 		{
@@ -67,10 +141,77 @@ argp_parse_common_options
 			/*try to duplicate the filtering command*/
 			property = strdup(arg);
 			if(!property)
-				error(EXIT_FAILURE, "Could not strdup the property");
+				error(EXIT_FAILURE, ENOMEM, "Could not strdup the property");
 				
 			break;
 			}
+		case ARGP_KEY_ARG: /*the directory to filter*/
+			{
+			/*try to duplicate the directory name*/
+			dir = strdup(arg);
+			if(!dir)
+				error(EXIT_FAILURE, ENOMEM, "Could not strdup the directory");
+
+			break;
+			}
+		case ARGP_KEY_END:
+			{
+			/*If parsing of startup options has not finished*/
+			if(!parsing_startup_options_finished)
+				{
+				/*reset the cache*/
+				ncache_reset();
+				
+				/*If the directory has not been specified*/
+				if(!dir)
+					{
+					/*assume the directory to be the home directory*/
+					dir = "~/";
+					}
+				
+				/*set the flag that the startup options have already been parsed*/
+				parsing_startup_options_finished = 1;
+				}
+			else
+				{
+/*TODO: Take care of runtime calls modifying the property*/
+				}
+			}
+		/*If the option could not be recognized*/
+		default:
+			{
+			/*set the error code*/
+			err = ARGP_ERR_UNKNOWN;
+			}
 		}
+		
+	/*Return the result*/
+	return err;
 	}/*argp_parse_common_options*/
+/*----------------------------------------------------------------------------*/
+/*Argp parser function for the startup options*/
+static
+error_t
+argp_parse_startup_options
+	(
+	int key,
+	char * arg,
+	struct argp_state * state
+	)
+	{
+	/*Do nothing in a beautiful way*/
+	error_t err = 0;
+	
+	switch(key)
+		{
+		default:
+			{
+			err = ARGP_ERR_UNKNOWN;
+			
+			break;
+			}
+		}
+	
+	return err;
+	}/*argp_parse_startup_options*/
 /*----------------------------------------------------------------------------*/

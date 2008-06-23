@@ -14,6 +14,14 @@
 #include <stdio.h>
 /*----------------------------------------------------------------------------*/
 #include "node.h"
+#include "options.h"
+#include "lib.h"
+/*----------------------------------------------------------------------------*/
+
+/*----------------------------------------------------------------------------*/
+/*--------Global Variables----------------------------------------------------*/
+/*The lock protecting the underlying filesystem*/
+struct mutex ulfs_lock = MUTEX_INITIALIZER;
 /*----------------------------------------------------------------------------*/
 
 /*----------------------------------------------------------------------------*/
@@ -108,3 +116,158 @@ node_create_root
 	return err;
 	}/*node_create_root*/
 /*----------------------------------------------------------------------------*/
+/*Initializes the port to the underlying filesystem for the root node*/
+error_t
+node_init_root
+	(
+	node_t * node	/*the root node*/
+	)
+	{
+	error_t err = 0;
+
+	/*Acquire a lock for operations on the underlying filesystem*/
+	mutex_lock(&ulfs_lock);
+	
+	/*Open the port to the directory specified in `dir`*/
+	node->nn->port = file_name_lookup(dir, O_READ | O_DIRECTORY, 0);
+	
+	/*If the directory could not be opened*/
+	if(node->nn->port != MACH_PORT_NULL)
+		/*set the error code accordingly*/
+		err = errno;
+	
+	/*Release the lock for operations on the undelying filesystem*/
+	mutex_unlock(&ulfs_lock);
+	
+	/*Return the result of operations*/
+	return err;
+	}/*node_init_root*/
+/*----------------------------------------------------------------------------*/
+/*Frees a list of dirents*/
+void
+node_entries_free
+	(
+	node_dirent_t * dirents	/*free this*/
+	)
+	{
+	/*The current and the next elements*/
+	node_dirent_t * dirent, * dirent_next;
+	
+	/*Go through all elements of the list*/
+	for(dirent = dirents; dirent; dirent = dirent_next)
+		{
+		/*store the next element*/
+		dirent_next = dirent->next;
+		
+		/*free the dirent stored in the current element of the list*/
+		free(dirent->dirent);
+		
+		/*free the current element*/
+		free(dirent);
+		}
+	}/*node_entries_free*/
+/*----------------------------------------------------------------------------*/
+/*Reads the directory entries from `node`, which must be locked*/
+error_t
+node_entries_get
+	(
+	node_t * node,
+	node_dirent_t ** dirents /*store the result here*/
+	)
+	{
+	error_t err = 0;
+
+	/*The list of dirents*/
+	struct dirent ** dirent_list, **dirent;
+	
+	/*The head of the list of dirents*/
+	node_dirent_t * node_dirent_list = NULL;
+	
+	/*The size of the array of pointers to dirent*/
+	size_t dirent_data_size;
+	
+	/*The array of dirents*/
+	char * dirent_data;
+
+	/*Obtain the directory entries for the given node*/
+	err = dir_entries_get
+		(node->nn->port, &dirent_data, &dirent_data_size, &dirent_list);
+	if(err)
+		return err;
+		
+	/*The new entry in the list*/
+	node_dirent_t * node_dirent_new;
+	
+	/*The new dirent*/
+	struct dirent * dirent_new;
+	
+	/*The name of the current dirent*/
+	char * name;
+
+	/*The length of the current name*/
+	int name_len;
+	
+	/*The size of the current dirent*/
+	int size;
+	
+	/*Go through all elements of the list of pointers to dirent*/
+	for(dirent = dirent_list; dirent; ++dirent)
+		{
+		/*obtain the name of the current dirent*/
+		name = (*dirent)->d_name;
+		
+		/*If the current dirent is either '.' or '..', skip it*/
+		if((strcmp(name, ".") == 0) ||	(strcmp(name, "..") == 0))
+			continue;
+		
+		/*obtain the length of the current name*/
+		name_len = strlen(name);
+		
+		/*obtain the length of the current dirent*/
+		size = DIRENT_LEN(name_len);
+		
+		/*create a new list element*/
+		node_dirent_new = malloc(sizeof(node_dirent_t));
+		if(!node_dirent_new)
+			{
+			err = ENOMEM;
+			break;
+			}
+			
+		/*create a new dirent*/
+		dirent_new = malloc(size);
+		if(!dirent_new)
+			{
+			free(node_dirent_new);
+			err = ENOMEM;
+			break;
+			}
+			
+		/*fill the dirent with information*/
+		dirent_new->d_fileno	= (*dirent)->d_fileno;
+		dirent_new->d_type 		= (*dirent)->d_type;
+		dirent_new->d_reclen	= size;
+		strcpy((char *)dirent_new + DIRENT_NAME_OFFS, name);
+		
+		/*add the dirent to the list*/
+		node_dirent_new->dirent = dirent_new;
+		node_dirent_new->next = node_dirent_list;
+		node_dirent_list = node_dirent_new;
+		}
+	
+	/*If something went wrong in the loop*/
+	if(err)
+		/*free the list of dirents*/
+		node_entries_free(node_dirent_list);
+	
+	/*Free the list of pointers to dirent*/
+	free(dirent_list);
+	
+	/*Free the results of listing the dirents*/
+	munmap(dirent_data, dirent_data_size);
+	
+	/*Return the result of operations*/
+	return err;
+	}/*node_entries_get*/
+/*----------------------------------------------------------------------------*/
+

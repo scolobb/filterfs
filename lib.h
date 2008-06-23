@@ -37,7 +37,8 @@ dir_entries_get
 	char ** dirent_data,					/*the list of directory entries as returned
 																	by dir_readdir*/
 	size_t * dirent_data_size,		/*the size of `dirent_data`*/
-	struct dirent *** dirent_list /*the array of dirents*/
+	struct dirent *** dirent_list /*the array of pointers to beginnings of
+																	dirents in dirent_data*/
 	);
 /*----------------------------------------------------------------------------*/
-#endif
+#endif /*__LIB_H__*/

@@ -25,27 +25,8 @@
 
 /*----------------------------------------------------------------------------*/
 /*--------Macros--------------------------------------------------------------*/
-/*Retrieves the current time fast*/
-#define NOW() ({\
-	struct timeval tv;\
-	maptime_read(filterfs_maptime, &tv);\
-	tv.tv_sec;\
-	})
-/*----------------------------------------------------------------------------*/
-/*The granularity of the result*/
-#define DIRENTS_CHUNK_SIZE (8 * 1024)
-/*----------------------------------------------------------------------------*/
-/*Alignment of directory entries*/
-#define DIRENT_ALIGN 4
-/*----------------------------------------------------------------------------*/
-/*The offset of the directory name in the directory entry structure*/
-#define DIRENT_NAME_OFFS offsetof(struct dirent, d_name)
-/*----------------------------------------------------------------------------*/
-/*Computes the length of the structure before the name + the name + 0,
-	all padded to DIRENT_ALIGN*/
-#define DIRENT_LEN(name_len)\
-	((DIRENT_NAME_OFFS + (name_len) + 1 + DIRENT_ALIGN - 1) &\
-	~(DIRENT_ALIGN - 1))
+/*The inode for the root node*/
+#define FILTERFS_ROOT_INODE 1
 /*----------------------------------------------------------------------------*/
 
 /*----------------------------------------------------------------------------*/
@@ -53,6 +34,9 @@
 /*A mapped time value for filterfs*/
 /*Required for a very fast access to time (?)*/
 extern volatile struct mapped_time_value * filterfs_maptime;
+/*----------------------------------------------------------------------------*/
+/*A port to the underlying node*/
+extern mach_port_t underlying_node;
 /*----------------------------------------------------------------------------*/
 
 /*----------------------------------------------------------------------------*/
@@ -236,7 +220,7 @@ netfs_get_dirents
 	struct iouser * cred,
 	struct node * dir,
 	int first_entry,
-	int max_entries,
+	int num_entries,
 	char ** data,
 	mach_msg_type_number_t * data_len,
 	vm_size_t max_data_len,

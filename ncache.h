@@ -77,4 +77,4 @@ ncache_node_add
 	node_t * node	/*the node to add*/
 	);
 /*----------------------------------------------------------------------------*/
-#endif
+#endif /*__NCACHE_H__*/

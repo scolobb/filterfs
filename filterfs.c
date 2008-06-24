@@ -3,6 +3,24 @@
 /*----------------------------------------------------------------------------*/
 /*The filtering translator*/
 /*----------------------------------------------------------------------------*/
+/*Copyright (C) 2001, 2002, 2005 Free Software Foundation, Inc.
+  Written by Sergiu Ivanov <unlimitedscolobb@gmail.com>.
+
+  This program is free software; you can redistribute it and/or
+  modify it under the terms of the GNU General Public License as
+  published by the Free Software Foundation; either version 2 of the
+  License, or * (at your option) any later version.
+
+  This program is distributed in the hope that it will be useful, but
+  WITHOUT ANY WARRANTY; without even the implied warranty of
+  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+  General Public License for more details.
+
+  You should have received a copy of the GNU General Public License
+  along with this program; if not, write to the Free Software
+  Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307
+  USA.*/
+/*----------------------------------------------------------------------------*/
 
 /*----------------------------------------------------------------------------*/
 #define _GNU_SOURCE 1
@@ -15,6 +33,7 @@
 #include <hurd/netfs.h>
 #include <fcntl.h>
 /*----------------------------------------------------------------------------*/
+#include "debug.h"
 #include "node.h"
 #include "options.h"
 #include "ncache.h"
@@ -43,6 +62,9 @@ volatile struct mapped_time_value * maptime;
 /*----------------------------------------------------------------------------*/
 /*The filesystem ID*/
 pid_t fsid;
+/*----------------------------------------------------------------------------*/
+/*The file to print debug messages to*/
+FILE * filterfs_dbg;
 /*----------------------------------------------------------------------------*/
 
 /*----------------------------------------------------------------------------*/
@@ -613,6 +635,10 @@ main
 	char ** argv
 	)
 	{
+	/*Start logging*/
+	INIT_LOG();
+	LOG_MSG(">> Starting initialization...");
+
 	/*The port on which this translator will be set upon*/
 	mach_port_t bootstrap_port;
 	
@@ -620,38 +646,46 @@ main
 	
 	/*Parse the command line arguments*/
 	argp_parse(&argp_startup, argc, argv, ARGP_IN_ORDER, 0, 0);
+	LOG_MSG("Command line arguments parsed.");
 	
 	/*Try to create the root node*/
 	err = node_create_root(&netfs_root_node);
 	if(err)
 		error(EXIT_FAILURE, err, "Failed to create the root node");
+	LOG_MSG("Root node created.");
 
 	/*Obtain the bootstrap port*/
 	task_get_bootstrap_port(mach_task_self(), &bootstrap_port);
 
 	/*Initialize the translator*/
 	netfs_init();
-	
+
 	/*Obtain a port to the underlying node*/
 	underlying_node = netfs_startup(bootstrap_port, O_READ);
+	LOG_MSG("netfs initialization complete.");
 
 	/*Initialize the root node*/
 	err = node_init_root(netfs_root_node);
 	if(err)
 		error(EXIT_FAILURE, err, "Failed to initialize the root node");
+	LOG_MSG("Root node initialized.");
 	
 	/*Map the time for updating node information*/
 	err = maptime_map(0, 0, &maptime);
 	if(err)
 		error(EXIT_FAILURE, err, "Failed to map the time");
+	LOG_MSG("Time mapped.");
 		
 	/*Initialize the cache with the required number of nodes*/
 	ncache_init(ncache_size);
+	LOG_MSG("Cache initialized.");
 	
 	/*Obtain stat information about the underlying node*/
 	err = io_stat(underlying_node, &underlying_node_stat);
 	if(err)
-		error(EXIT_FAILURE, err, "Cannot obtain stat information about the underlying node");
+		error(EXIT_FAILURE, err,
+			"Cannot obtain stat information about the underlying node");
+	LOG_MSG("Stat information for undelying node obtained.");
 		
 	/*Obtain the ID of the current process*/
 	fsid = getpid();
@@ -688,9 +722,15 @@ main
 	fshelp_touch
 		(&netfs_root_node->nn_stat, TOUCH_ATIME | TOUCH_MTIME | TOUCH_CTIME,
 		maptime);
+
+	LOG_MSG(">> Initialization complete. Entering netfs server loop...");
 	
 	/*Start serving clients*/
 	for(;;)
 		netfs_server_loop();
+		
+	/*Stop logging*/
+	LOG_MSG(">> Successfully went away.");
+	CLOSE_LOG();
 	}/*main*/
 /*----------------------------------------------------------------------------*/

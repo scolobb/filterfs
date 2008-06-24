@@ -1,7 +1,7 @@
 /*----------------------------------------------------------------------------*/
-/*options.h*/
+/*debug.h*/
 /*----------------------------------------------------------------------------*/
-/*Declarations for parsing the command line switches*/
+/*Simple facilities for debugging messages*/
 /*----------------------------------------------------------------------------*/
 /*Copyright (C) 2001, 2002, 2005 Free Software Foundation, Inc.
   Written by Sergiu Ivanov <unlimitedscolobb@gmail.com>.
@@ -21,39 +21,38 @@
   Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307
   USA.*/
 /*----------------------------------------------------------------------------*/
-#ifndef __OPTIONS_H__
-#define __OPTIONS_H__
+#ifndef __DEBUG_H__
+#define __DEBUG_H__
+
+/*----------------------------------------------------------------------------*/
+#include <stdio.h>
+/*----------------------------------------------------------------------------*/
 
 /*----------------------------------------------------------------------------*/
 /*--------Macros--------------------------------------------------------------*/
-/*The possible short options*/
-#define OPT_CACHE_SIZE 'c'
-/*the property according to which filtering will be performed*/
-#define OPT_PROPERTY	 'p'
+/*Print debug messages here*/
+#define DEBUG_OUTPUT "/var/tmp/filterfs.dbg"
 /*----------------------------------------------------------------------------*/
-/*The corresponding long options*/
-#define OPT_LONG_CACHE_SIZE "cache-size"
-#define OPT_LONG_PROPERTY 	"property"
-/*----------------------------------------------------------------------------*/
-/*Makes a long option out of option name*/
-#define OPT_LONG(o) "--" o
+#ifdef DEBUG
+	/*Initializes the log*/
+#	define INIT_LOG() filterfs_dbg = fopen(DEBUG_OUTPUT, "wt")
+	/*Closes the log*/
+# define CLOSE_LOG() fclose(filterfs_dbg)
+	/*Prints a debug message and flushes the debug output*/
+#	define LOG_MSG(fmt, args...) {fprintf(filterfs_dbg, fmt"\n", ##args);\
+		fflush(filterfs_dbg);}
+#else
+	/*Remove requests for debugging output*/
+#	define INIT_LOG()
+#	define CLOSE_LOG()
+#	define LOG_MSG(fmt, args...)
+#endif /*DEBUG*/
 /*----------------------------------------------------------------------------*/
 
 /*----------------------------------------------------------------------------*/
 /*--------Global Variables----------------------------------------------------*/
-/*The argp parser for startup arguments*/
-extern struct argp argp_startup;
+/*The file to write debugging info to*/
+extern FILE * filterfs_dbg;
 /*----------------------------------------------------------------------------*/
-/*The argp parser for rutime arguments*/
-extern struct argp argp_runtime;
-/*----------------------------------------------------------------------------*/
-/*The number of nodes in cache (see ncache.{c,h})*/
-extern int ncache_size;
-/*----------------------------------------------------------------------------*/
-/*The filtering command*/
-extern char * property;
-/*----------------------------------------------------------------------------*/
-/*The directory to filter*/
-extern char * dir;
-/*----------------------------------------------------------------------------*/
-#endif /*__OPTIONS_H__*/
+
+#endif /*__DEBUG_H__*/

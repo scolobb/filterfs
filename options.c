@@ -184,7 +184,10 @@ argp_parse_common_options
 				if(!dir)
 					{
 					/*assume the directory to be the home directory*/
-					dir = "~/";
+					;
+
+					/*FIXME: The default directory is /var/tmp*/
+					dir = "/var/tmp";
 					}
 				
 				/*set the flag that the startup options have already been parsed*/

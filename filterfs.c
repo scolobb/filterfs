@@ -216,12 +216,12 @@ netfs_get_dirents
 	add_dirent
 		(
 		const char * name,
-		ino_t fileno,
+		ino_t ino,
 		int type
 		)
 		{
 		/*If the required number of dirents has not been listed yet*/
-		if((num_entries == -1) && (count < num_entries))
+		if((num_entries == -1) || (count < num_entries))
 			{
 			/*create a new dirent*/
 			struct dirent hdr;
@@ -241,7 +241,7 @@ netfs_get_dirents
 				size -= sz;
 				
 			/*setup the dirent*/
-			hdr.d_fileno = fileno;
+			hdr.d_ino 	 = ino;
 			hdr.d_reclen = sz;
 			hdr.d_type   = type;
 			hdr.d_namlen = name_len;
@@ -278,7 +278,7 @@ netfs_get_dirents
 			dirent_start = dirent_list, count = 2;
 			dirent_start && (count < first_entry);
 			dirent_start = dirent_start->next, ++count
-			)
+			);
 			
 		/*reset number of dirents added so far*/
 		count = 0;
@@ -669,6 +669,7 @@ main
 	if(err)
 		error(EXIT_FAILURE, err, "Failed to initialize the root node");
 	LOG_MSG("Root node initialized.");
+	LOG_MSG("\tRoot node address: 0x%lX", (unsigned long)netfs_root_node);
 	
 	/*Map the time for updating node information*/
 	err = maptime_map(0, 0, &maptime);

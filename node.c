@@ -31,6 +31,7 @@
 #include <sys/mman.h>
 #include <stdio.h>
 /*----------------------------------------------------------------------------*/
+#include "debug.h"
 #include "node.h"
 #include "options.h"
 #include "lib.h"
@@ -150,9 +151,14 @@ node_init_root
 	node->nn->port = file_name_lookup(dir, O_READ | O_DIRECTORY, 0);
 	
 	/*If the directory could not be opened*/
-	if(node->nn->port != MACH_PORT_NULL)
+	if(node->nn->port == MACH_PORT_NULL)
+		{
 		/*set the error code accordingly*/
 		err = errno;
+		LOG_MSG("node_init_root: Could not open the port for %s.", dir);
+		}
+	LOG_MSG("node_init_root: Port for %s opened successfully.", dir);
+	LOG_MSG("\tPort: 0x%lX", (unsigned long)node->nn->port);
 	
 	/*Release the lock for operations on the undelying filesystem*/
 	mutex_unlock(&ulfs_lock);
@@ -219,6 +225,14 @@ node_entries_get
 	/*The new dirent*/
 	struct dirent * dirent_new;
 	
+	LOG_MSG("node_entries_get: Getting entries for %p", node);
+	LOG_MSG("\tsizeof(dirent) = %d", sizeof(*dirent_new));
+	LOG_MSG("\tsizeof(dirent::d_ino)    = %d", sizeof(dirent_new->d_ino));
+	LOG_MSG("\tsizeof(dirent::d_type)   = %d", sizeof(dirent_new->d_type));
+	LOG_MSG("\tsizeof(dirent::d_reclen) = %d", sizeof(dirent_new->d_reclen));
+	LOG_MSG("\tsizeof(dirent::d_namlen) = %d", sizeof(dirent_new->d_namlen));
+	LOG_MSG("\tsizeof(dirent::d_name)   = %d", sizeof(dirent_new->d_name));
+
 	/*The name of the current dirent*/
 	char * name;
 
@@ -229,10 +243,10 @@ node_entries_get
 	int size;
 	
 	/*Go through all elements of the list of pointers to dirent*/
-	for(dirent = dirent_list; dirent; ++dirent)
+	for(dirent = dirent_list; *dirent; ++dirent)
 		{
 		/*obtain the name of the current dirent*/
-		name = (*dirent)->d_name;
+		name = (char *)(*dirent + 1);
 		
 		/*If the current dirent is either '.' or '..', skip it*/
 		if((strcmp(name, ".") == 0) ||	(strcmp(name, "..") == 0))
@@ -262,7 +276,7 @@ node_entries_get
 			}
 			
 		/*fill the dirent with information*/
-		dirent_new->d_fileno	= (*dirent)->d_fileno;
+		dirent_new->d_ino			= (*dirent)->d_ino;
 		dirent_new->d_type 		= (*dirent)->d_type;
 		dirent_new->d_reclen	= size;
 		strcpy((char *)dirent_new + DIRENT_NAME_OFFS, name);
@@ -277,6 +291,9 @@ node_entries_get
 	if(err)
 		/*free the list of dirents*/
 		node_entries_free(node_dirent_list);
+	else
+		/*store the list of dirents in the second parameter*/
+		*dirents = node_dirent_list;
 	
 	/*Free the list of pointers to dirent*/
 	free(dirent_list);

@@ -101,6 +101,14 @@ node_entries_free
 	node_dirent_t * dirents	/*free this*/
 	);
 /*----------------------------------------------------------------------------*/
+/*Constructs the absolute path to the given node*/
+error_t
+node_construct_path
+	(
+	node_t * node,
+	char ** path	/*the receiver for the path*/
+	);
+/*----------------------------------------------------------------------------*/
 /*Reads the directory entries from `node`, which must be locked*/
 error_t
 node_entries_get

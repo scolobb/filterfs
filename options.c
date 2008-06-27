@@ -28,6 +28,7 @@
 #include <argp.h>
 #include <error.h>
 /*----------------------------------------------------------------------------*/
+#include "debug.h"
 #include "options.h"
 #include "ncache.h"
 #include "node.h"
@@ -37,7 +38,8 @@
 /*--------Macros--------------------------------------------------------------*/
 /*Short documentation for argp*/
 #define ARGS_DOC	"DIR"
-#define DOC 			"Shows the contents of DIR filtered according to PROPERTY. If DIR is not specified, ~/ is assumed."
+#define DOC 			"Shows the contents of DIR filtered according to PROPERTY.\
+ If DIR is not specified, ~/ is assumed."
 /*----------------------------------------------------------------------------*/
 
 /*----------------------------------------------------------------------------*/
@@ -168,7 +170,19 @@ argp_parse_common_options
 			/*try to duplicate the directory name*/
 			dir = strdup(arg);
 			if(!dir)
-				error(EXIT_FAILURE, ENOMEM, "Could not strdup the directory");
+				error(EXIT_FAILURE, ENOMEM, "argp_parse_common_options: "
+					"Could not strdup the directory");
+				
+			/*fill all trailing spaces with 0*/
+			int i;
+			for(i = strlen(dir) - 1; (i >= 0) && (dir[i] == ' '); dir[i--] = 0);
+			
+			/*if the last non blank symbol is a '/'*/
+			if(dir[i] == '/')
+				/*put 0 instead*/
+				dir[i] = 0;
+				
+			LOG_MSG("argp_parse_common_options: Filtering the directory %s.", dir);
 
 			break;
 			}

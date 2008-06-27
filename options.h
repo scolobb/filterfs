@@ -36,7 +36,10 @@
 #define OPT_LONG_PROPERTY 	"property"
 /*----------------------------------------------------------------------------*/
 /*Makes a long option out of option name*/
-#define OPT_LONG(o) "--" o
+#define OPT_LONG(o) "--"o
+/*----------------------------------------------------------------------------*/
+/*The substring of the property which shall be replaced by the filename*/
+#define PROPERTY_PARAM "{}"
 /*----------------------------------------------------------------------------*/
 
 /*----------------------------------------------------------------------------*/

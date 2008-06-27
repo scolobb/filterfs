@@ -43,6 +43,9 @@ struct lnode
 	quite often, therefore calculate it just once*/
 	size_t name_len;
 	
+	/*the full path to the lnode*/
+	char * path;
+	
 	/*the associated flags*/
 	int flags;
 	

@@ -150,6 +150,39 @@ node_init_root
 	/*Open the port to the directory specified in `dir`*/
 	node->nn->port = file_name_lookup(dir, O_READ | O_DIRECTORY, 0);
 	
+	/*Set the path to the corresponding lnode to `dir`*/
+	node->nn->lnode->path = strdup(dir);
+	
+	/*The current position in dir*/
+	char * p = dir + strlen(dir);
+	
+	/*Go through the path from end to beginning*/
+	for(; p >= dir; --p)
+		{
+		/*If the current character is a '/'*/
+		if(*p == '/')
+			{
+			/*If p is not the first character*/
+			if(p > dir)
+				{
+				/*if this slash is escaped, skip it*/
+				if(*(p - 1) == '\\')
+					continue;
+				}
+			
+			/*advance the pointer to the first character after the slash*/
+			++p;
+
+			/*stop*/
+			break;
+			}
+		}
+		
+	LOG_MSG("node_init_root: The name of root node is %s.", p);
+	
+	/*Set the name of the lnode to the last element in the path to dir*/
+	node->nn->lnode->name = strdup(p);
+	
 	/*If the directory could not be opened*/
 	if(node->nn->port == MACH_PORT_NULL)
 		{
@@ -201,6 +234,116 @@ node_entries_get
 	{
 	error_t err = 0;
 
+	/*The number of PROPERTY_PARAMs in the property*/
+	int param_entries_count = 0;
+	
+	/*The length of the property*/
+	size_t property_len = strlen(property);
+	
+	/*The length of PROPERTY_PARAM*/
+	size_t property_param_len = strlen(PROPERTY_PARAM);
+
+	/*If some property was indeed specified*/
+	if(property && (property_len != 0))
+		{
+		/*the pointer to the current occurrence of PROPERTY_PARAM*/
+		char * occurrence = strstr(property, PROPERTY_PARAM);
+		
+		/*count the number of occurrences*/
+		for(; occurrence;
+			occurrence = strstr(occurrence + 1, PROPERTY_PARAM),
+			++param_entries_count);
+		}
+
+	/*Obtain the path to the current node*/
+	char * path_to_node = node->nn->lnode->path;
+	
+	/*Obtain the length of the path*/
+	size_t pathlen = strlen(path_to_node);
+
+	/*Checks if the given file satisfies the property. Zero value means that
+		the entry must be filtered out*/
+	int
+	check_property
+		(
+		const char * name	/*the name of the file*/
+		)
+		{
+		/*If there is no property*/
+		if(!property)
+			/*no filtering will be applied*/
+			return 1;
+		
+		/*Everything OK at first*/
+		err = 0;
+		
+		/*Allocate the space for the path to name, separator and name*/
+		char * full_name = malloc((pathlen + 1 + strlen(name) + 1) * sizeof(char));
+		if(!full_name)
+			{
+			err = ENOMEM;
+			return 0; /*no meaning here*/
+			}
+			
+		/*Construct the full name*/
+		strcpy(full_name, path_to_node);
+		strcat(full_name, "/");
+		strcat(full_name, name);
+		
+		/*LOG_MSG("node_entries_get: Applying filter to %s...", full_name);*/
+		
+		/*Compute the space required for the final filtering command*/
+		size_t sz = property_len + (strlen(full_name) - property_param_len)
+			* param_entries_count;
+		
+		/*Allocate memory for the filtering command*/
+		char * cmd = malloc(sz * sizeof(char));
+		if(!cmd)
+			{
+			err = ENOMEM;
+			free(full_name);
+			return 0; /*no meaning here*/
+			}
+			
+		/*The current occurence of PROPERTY_PARAM in property*/
+		char * p = strstr(property, PROPERTY_PARAM);
+		
+		/*The pointer to the current position in the property*/
+		char * propp = property;
+		
+		/*While the command has not been constructed*/
+		for(; p; p = strstr(propp, PROPERTY_PARAM))
+			{
+			/*add the new part of the property to the command*/
+			strncat(cmd, propp, p - propp);
+			
+			/*add the filename to the command*/
+			strcat(cmd, full_name);
+			
+			/*LOG_MSG("\tcmd = '%s'", cmd);*/
+
+			/*advance the pointer in the property*/
+			propp = p + property_param_len;
+
+			/*LOG_MSG("\tpropp points at '%s'", propp);*/
+			}
+		
+		/*Copy the rest of the property to the command*/
+		strcat(cmd, propp);
+		
+		/*LOG_MSG("node_entries_get: The filtering command: '%s'.", cmd);*/
+
+		/*Execute the command*/
+		int xcode = WEXITSTATUS(system(cmd));
+		
+		/*Free the strings*/
+		free(full_name);
+		free(cmd);
+		
+		/*Return the exit code of the command*/
+		return xcode;
+		}/*check_property*/
+
 	/*The list of dirents*/
 	struct dirent ** dirent_list, **dirent;
 	
@@ -217,7 +360,9 @@ node_entries_get
 	err = dir_entries_get
 		(node->nn->port, &dirent_data, &dirent_data_size, &dirent_list);
 	if(err)
+		{
 		return err;
+		}
 		
 	/*The new entry in the list*/
 	node_dirent_t * node_dirent_new;
@@ -226,21 +371,18 @@ node_entries_get
 	struct dirent * dirent_new;
 	
 	LOG_MSG("node_entries_get: Getting entries for %p", node);
-	LOG_MSG("\tsizeof(dirent) = %d", sizeof(*dirent_new));
-	LOG_MSG("\tsizeof(dirent::d_ino)    = %d", sizeof(dirent_new->d_ino));
-	LOG_MSG("\tsizeof(dirent::d_type)   = %d", sizeof(dirent_new->d_type));
-	LOG_MSG("\tsizeof(dirent::d_reclen) = %d", sizeof(dirent_new->d_reclen));
-	LOG_MSG("\tsizeof(dirent::d_namlen) = %d", sizeof(dirent_new->d_namlen));
-	LOG_MSG("\tsizeof(dirent::d_name)   = %d", sizeof(dirent_new->d_name));
 
 	/*The name of the current dirent*/
 	char * name;
 
 	/*The length of the current name*/
-	int name_len;
+	size_t name_len;
 	
 	/*The size of the current dirent*/
-	int size;
+	size_t size;
+	
+	/*The exit code of property*/
+	int good;
 	
 	/*Go through all elements of the list of pointers to dirent*/
 	for(dirent = dirent_list; *dirent; ++dirent)
@@ -250,6 +392,15 @@ node_entries_get
 		
 		/*If the current dirent is either '.' or '..', skip it*/
 		if((strcmp(name, ".") == 0) ||	(strcmp(name, "..") == 0))
+			continue;
+		
+		/*check if the current dirent has the property*/
+		good = check_property(name);
+		if(err)
+			break;
+ 		
+		/*If the current entry is not good, skip it*/
+		if(good != 0)
 			continue;
 		
 		/*obtain the length of the current name*/

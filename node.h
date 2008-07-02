@@ -3,6 +3,8 @@
 /*----------------------------------------------------------------------------*/
 /*Node management. Also see lnode.h*/
 /*----------------------------------------------------------------------------*/
+/*Based on the code of unionfs translator.*/
+/*----------------------------------------------------------------------------*/
 /*Copyright (C) 2001, 2002, 2005 Free Software Foundation, Inc.
   Written by Sergiu Ivanov <unlimitedscolobb@gmail.com>.
 
@@ -30,6 +32,24 @@
 #include <hurd/netfs.h>
 /*----------------------------------------------------------------------------*/
 #include "lnode.h"
+/*----------------------------------------------------------------------------*/
+
+/*----------------------------------------------------------------------------*/
+/*--------Macros--------------------------------------------------------------*/
+/*Checks whether the give node is the root of the filterfs filesystem*/
+#define NODE_IS_ROOT(n) (((n)->nn->lnode->dir) ? (1) : (0))
+/*----------------------------------------------------------------------------*/
+/*Node flags*/
+#define FLAG_NODE_ULFS_FIXED 		0x00000001	/*this node should not be updated*/
+#define FLAG_NODE_INVALIDATE		0x00000002 	/*this node must be updated*/
+#define FLAG_NODE_ULFS_UPTODATE	0x00000004 	/*this node has just been updated*/
+/*----------------------------------------------------------------------------*/
+/*The type of offset corresponding to the current platform*/
+#ifdef __USE_FILE_OFFSET64
+#	define OFFSET_T __off64_t
+#else
+#	define OFFSET_T __off_t
+#endif /*__USE_FILE_OFFSET64*/
 /*----------------------------------------------------------------------------*/
 
 /*----------------------------------------------------------------------------*/
@@ -101,20 +121,49 @@ node_entries_free
 	node_dirent_t * dirents	/*free this*/
 	);
 /*----------------------------------------------------------------------------*/
-/*Constructs the absolute path to the given node*/
-error_t
-node_construct_path
-	(
-	node_t * node,
-	char ** path	/*the receiver for the path*/
-	);
-/*----------------------------------------------------------------------------*/
 /*Reads the directory entries from `node`, which must be locked*/
 error_t
 node_entries_get
 	(
 	node_t * node,
 	node_dirent_t ** dirents /*store the result here*/
+	);
+/*----------------------------------------------------------------------------*/
+/*Looks up `name` under 'dir' with 'flags' as open flags; return the first
+	successfully looked up port in `port` and the corresponding stat information
+	in `stat`*/
+error_t
+node_lookup_file
+	(
+	node_t * dir,
+	char * name,
+	int flags,
+	file_t * port,
+	io_statbuf_t * s
+	);
+/*----------------------------------------------------------------------------*/
+/*Makes sure that all ports to the underlying filesystem of `node` are up to
+	date*/
+error_t
+node_update
+	(
+	node_t * node
+	);
+/*----------------------------------------------------------------------------*/
+/*Computes the size of the given directory*/
+error_t
+node_get_size
+	(
+	node_t * dir,
+	OFFSET_T * off
+	);
+/*----------------------------------------------------------------------------*/
+/*Remove the file called `name` under `dir`*/
+error_t
+node_unlink_file
+	(
+	node_t * dir,
+	char * name
 	);
 /*----------------------------------------------------------------------------*/
 #endif /*__NODE_H__*/

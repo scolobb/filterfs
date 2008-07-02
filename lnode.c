@@ -3,6 +3,8 @@
 /*----------------------------------------------------------------------------*/
 /*Implementation of policies of management of 'light nodes'*/
 /*----------------------------------------------------------------------------*/
+/*Based on the code of unionfs translator.*/
+/*----------------------------------------------------------------------------*/
 /*Copyright (C) 2001, 2002, 2005 Free Software Foundation, Inc.
   Written by Sergiu Ivanov <unlimitedscolobb@gmail.com>.
 
@@ -40,6 +42,30 @@ lnode_ref_add
 	/*Increment the number of references*/
 	++node->references;
 	}/*lnode_ref_add*/
+/*----------------------------------------------------------------------------*/
+/*Removes a reference from `node` (which must be locked). If that was the last
+	reference, destroy the node*/
+void
+lnode_ref_remove
+	(
+	lnode_t * node
+	)
+	{
+	/*Fail if the node is not referenced by anybody*/
+	assert(node->references);
+	
+	/*Decrement the number of references to `node`*/
+	--node->references;
+	
+	/*If there are no references remaining*/
+	if(node->references == 0)
+		{
+		/**/
+		}
+	else
+		/*simply unlock the node*/
+		mutex_unlock(&node->lock);
+	}/*lnode_ref_remove*/
 /*----------------------------------------------------------------------------*/
 /*Creates a new lnode with `name`; the new node is locked and contains
 	a single reference*/
@@ -112,4 +138,130 @@ lnode_destroy
 	/*Destroy the node itself*/
 	free(node);
 	}/*lnode_destroy*/
+/*----------------------------------------------------------------------------*/
+/*Constructs the full path for the given lnode and stores the result both in
+	the parameter and inside the lnode (the same string, actually)*/
+error_t
+lnode_path_construct
+	(
+	lnode_t * node,
+	char ** path	/*store the path here*/
+	)
+	{
+	error_t err;
+
+	/*The final path*/
+	char * p;
+	
+	/*The final length of the path*/
+	int p_len = 1;
+	
+	/*A temporary pointer to an lnode*/
+	lnode_t * n;
+	
+	/*While the root node of the filterfs filesystem has not been reached*/
+	for(n = node; n && n->dir; n = n->dir)
+		/*add the length of the name of `n` to `p_len` make some space for
+			the delimiter '/', if we are not approaching the root node*/
+		p_len += n->name_len + ((n->dir->dir) ? (1) : (0));
+		
+	/*Try to allocate the space for the string*/
+	p = malloc(p_len * sizeof(char));
+	if(!p)
+		err = ENOMEM;
+	/*If memory allocation has been successful*/
+	else
+		{
+		/*put a terminal 0 at the end of the path*/
+		p[--p_len] = 0;
+		
+		/*While the root node of the filterfs filesystem has not been reached*/
+		for(n = node; n && n->dir; n = n->dir)
+			{
+			/*compute the position where the name of `n` is to be inserted*/
+			p_len -= n->name_len;
+			
+			/*copy the name of the node into the path (omit the terminal 0)*/
+			strncpy(p + p_len, n->name, n->name_len);
+			
+			/*If we are not at the root node of the filterfs filesystem, add the
+				separator*/
+			if(n->dir->dir)
+				p[--p_len] = '/';
+			}
+		
+		/*destroy the former path in lnode, if it exists*/
+		if(node->path)
+			free(node->path);
+		
+		/*store the new path inside the lnode*/
+		node->path = p;
+
+		/*store the path in the parameter*/
+		*path = p;
+		}
+		
+	/*Return the result of operations*/
+	return err;
+	}/*lnode_path_construct*/
+/*----------------------------------------------------------------------------*/
+/*Gets a light node by its name, locks it and increments its refcount*/
+error_t
+lnode_get
+	(
+	lnode_t * dir,	/*search here*/
+	char * name,		/*search for this name*/
+	lnode_t ** node	/*put the result here*/
+	)
+	{
+	error_t err = 0;
+	
+	/*The pointer to the required lnode*/
+	lnode_t * n;
+	
+	/*Find `name` among the names of entries in `dir`*/
+	for(n = dir->entries; n && (strcmp(n->name, name) != 0); n = n->next)
+	
+	/*If the search has been successful*/
+	if(n)
+		{
+		/*lock the node*/
+		mutex_lock(&n->lock);
+		
+		/*increment the refcount of the found lnode*/
+		lnode_ref_add(n);
+		
+		/*put a pointer to `n` into the parameter*/
+		*node = n;
+		}
+	else
+		err = ENOENT;
+		
+	/*Return the result of operations*/
+	return err;
+	}/*lnode_get*/
+/*----------------------------------------------------------------------------*/
+/*Install the lnode into the lnode tree: add a reference to `dir` (which must
+	be locked)*/
+void
+lnode_install
+	(
+	lnode_t * dir,	/*install here*/
+	lnode_t * node	/*install this*/
+	)
+	{
+	/*Install `node` into the list of entries in `dir`*/
+	node->next = dir->entries;
+	node->prevp = &dir->entries; /*this node is the first on the list*/
+	if(dir->entries)
+		dir->entries->prevp = &node->next;	/*here `prevp` gets the value
+																					corresponding to its meaning*/
+	dir->entries = node;
+	
+	/*Add a new reference to dir*/
+	lnode_ref_add(dir);
+	
+	/*Setup the `dir` link in node*/
+	node->dir = dir;
+	}/*lnode_install*/
 /*----------------------------------------------------------------------------*/

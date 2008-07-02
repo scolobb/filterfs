@@ -3,6 +3,8 @@
 /*----------------------------------------------------------------------------*/
 /*Definitions for parsing the command line switches*/
 /*----------------------------------------------------------------------------*/
+/*Based on the code of unionfs translator.*/
+/*----------------------------------------------------------------------------*/
 /*Copyright (C) 2001, 2002, 2005 Free Software Foundation, Inc.
   Written by Sergiu Ivanov <unlimitedscolobb@gmail.com>.
 
@@ -174,8 +176,9 @@ argp_parse_common_options
 					"Could not strdup the directory");
 				
 			/*fill all trailing spaces with 0*/
-			int i;
-			for(i = strlen(dir) - 1; (i >= 0) && (dir[i] == ' '); dir[i--] = 0);
+			int i = strlen(dir) - 1;
+			/*for(i = strlen(dir) - 1; (i >= 0) && (dir[i] == ' '); dir[i--] = 0);*/
+				/*the original filename may contain spaces*/
 			
 			/*if the last non blank symbol is a '/'*/
 			if(dir[i] == '/')

@@ -3,6 +3,8 @@
 /*----------------------------------------------------------------------------*/
 /*Declarations of basic routines for filesystem manipulations*/
 /*----------------------------------------------------------------------------*/
+/*Based on the code of unionfs translator.*/
+/*----------------------------------------------------------------------------*/
 /*Copyright (C) 2001, 2002, 2005 Free Software Foundation, Inc.
   Written by Sergiu Ivanov <unlimitedscolobb@gmail.com>.
 
@@ -47,6 +49,9 @@
 /*Aligns the first parameter to the stride specified by the second parameter*/
 #define ALIGN(x, stride) (((x) + (stride) - 1) & ~((stride) - 1))
 /*----------------------------------------------------------------------------*/
+/*Deallocate the given port for the current task*/
+#define PORT_DEALLOC(p) (mach_port_deallocate(mach_task_self(), (p)))
+/*----------------------------------------------------------------------------*/
 
 /*----------------------------------------------------------------------------*/
 /*--------Functions-----------------------------------------------------------*/
@@ -60,6 +65,19 @@ dir_entries_get
 	size_t * dirent_data_size,		/*the size of `dirent_data`*/
 	struct dirent *** dirent_list /*the array of pointers to beginnings of
 																	dirents in dirent_data*/
+	);
+/*----------------------------------------------------------------------------*/
+/*Lookup `name` under `dir` (or cwd, if `dir` is invalid)*/
+error_t
+file_lookup
+	(
+	file_t dir,
+	char * name,
+	int flags0,					/*try to open with these flags first*/
+	int flags1,					/*try to open with these flags, if `flags0` fail*/
+	int mode,						/*if the file is to be created, create it with this mode*/
+	file_t * port,			/*store the port to the looked up file here*/
+	io_statbuf_t * stat	/*store the stat information here*/
 	);
 /*----------------------------------------------------------------------------*/
 #endif /*__LIB_H__*/

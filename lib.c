@@ -3,6 +3,8 @@
 /*----------------------------------------------------------------------------*/
 /*Basic routines for filesystem manipulations*/
 /*----------------------------------------------------------------------------*/
+/*Based on the code of unionfs translator.*/
+/*----------------------------------------------------------------------------*/
 /*Copyright (C) 2001, 2002, 2005 Free Software Foundation, Inc.
   Written by Sergiu Ivanov <unlimitedscolobb@gmail.com>.
 
@@ -126,4 +128,89 @@ dir_entries_get
 	/*Return success*/
 	return err;
 	}/*dir_entries_get*/
+/*----------------------------------------------------------------------------*/
+/*Lookup `name` under `dir` (or cwd, if `dir` is invalid)*/
+error_t
+file_lookup
+	(
+	file_t dir,
+	char * name,
+	int flags0,					/*try to open with these flags first*/
+	int flags1,					/*try to open with these flags, if `flags0` fail*/
+	int mode,						/*if the file is to be created, create it with this mode*/
+	file_t * port,			/*store the port to the looked up file here*/
+	io_statbuf_t * stat	/*store the stat information here*/
+	)
+	{
+	error_t err = 0;
+	
+	/*The port to the looked up file*/
+	file_t p;
+	
+	/*The stat information about the looked up file*/
+	io_statbuf_t s;
+	
+	/*Performs a lookup under 'dir' or in cwd, if `dir` is invalid*/
+	file_t
+	do_file_lookup
+		(
+		file_t dir,
+		char * name,	/*lookup this file*/
+		int flags,		/*lookup the file with these flags*/
+		int mode			/*if a new file is to be created, create it with this mode*/
+		)
+		{
+		/*The result of lookup*/
+		file_t p;
+	
+		/*If `dir` is a valid port*/
+		if(dir != MACH_PORT_NULL)
+			/*try to lookup `name` under `dir`*/
+			p = file_name_lookup_under(dir, name, flags, mode);
+		else
+			/*lookup `name` under current cwd*/
+			p = file_name_lookup(name, flags, mode);
+		
+		/*Return the result of the lookup*/
+		return p;
+		}/*do_file_lookup*/
+		
+	/*Lookup `name` under the suggested `dir`*/
+	p = do_file_lookup(dir, name, flags0, mode);
+	
+	/*If the lookup failed*/
+	if(p == MACH_PORT_NULL)
+		/*try to lookup for `name` using alternative flags `flags1`*/
+		p = do_file_lookup(dir, name, flags1, mode);
+	
+	/*If the port is valid*/
+	if(p != MACH_PORT_NULL)
+		{
+		/*If stat information is required*/
+		if(stat)
+			{
+			/*obtain stat information for `p`*/
+			err = io_stat(p, &s);
+			if(err)
+				PORT_DEALLOC(p);
+			}
+		}
+	else
+		/*copy `errno` into `err`*/
+		err = errno;
+
+	/*If no errors have happened during lookup*/
+	if(!err)
+		{
+		/*copy the resulting port into *`port`*/
+		*port = p;
+		
+		/*fill in the receiver for stat information, if requried*/
+		if(stat)
+			*stat = s;
+		}
+	
+	/*Return the result of performing operations*/
+	return err;
+	}/*file_lookup*/
 /*----------------------------------------------------------------------------*/

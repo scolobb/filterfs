@@ -3,6 +3,8 @@
 /*----------------------------------------------------------------------------*/
 /*Implementation of node management strategies*/
 /*----------------------------------------------------------------------------*/
+/*Based on the code of unionfs translator.*/
+/*----------------------------------------------------------------------------*/
 /*Copyright (C) 2001, 2002, 2005 Free Software Foundation, Inc.
   Written by Sergiu Ivanov <unlimitedscolobb@gmail.com>.
 
@@ -35,6 +37,7 @@
 #include "node.h"
 #include "options.h"
 #include "lib.h"
+#include "filterfs.h"
 /*----------------------------------------------------------------------------*/
 
 /*----------------------------------------------------------------------------*/
@@ -150,8 +153,29 @@ node_init_root
 	/*Open the port to the directory specified in `dir`*/
 	node->nn->port = file_name_lookup(dir, O_READ | O_DIRECTORY, 0);
 	
+	/*If the directory could not be opened*/
+	if(node->nn->port == MACH_PORT_NULL)
+		{
+		/*set the error code accordingly*/
+		err = errno;
+		LOG_MSG("node_init_root: Could not open the port for %s.", dir);
+		}
+	LOG_MSG("node_init_root: Port for %s opened successfully.", dir);
+	LOG_MSG("\tPort: 0x%lX", (unsigned long)node->nn->port);
+	
 	/*Set the path to the corresponding lnode to `dir`*/
 	node->nn->lnode->path = strdup(dir);
+	if(!node->nn->lnode->path)
+		{
+		/*deallocate the port*/
+		PORT_DEALLOC(node->nn->port);
+
+		/*unlock the mutex*/
+		mutex_unlock(&ulfs_lock);
+
+		LOG_MSG("node_init_root: Could not strdup the directory.");
+		return ENOMEM;
+		}
 	
 	/*The current position in dir*/
 	char * p = dir + strlen(dir);
@@ -182,17 +206,23 @@ node_init_root
 	
 	/*Set the name of the lnode to the last element in the path to dir*/
 	node->nn->lnode->name = strdup(p);
-	
-	/*If the directory could not be opened*/
-	if(node->nn->port == MACH_PORT_NULL)
+	/*If the name of the node could not be duplicated*/
+	if(!node->nn->lnode->name)
 		{
-		/*set the error code accordingly*/
-		err = errno;
-		LOG_MSG("node_init_root: Could not open the port for %s.", dir);
+		/*free the name of the path to the node and deallocate teh port*/
+		free(node->nn->lnode->path);
+		PORT_DEALLOC(node->nn->port);
+		
+		/*unlock the mutex*/
+		mutex_unlock(&ulfs_lock);
+
+		LOG_MSG("node_init_root: Could not strdup the name of the root node.");
+		return ENOMEM;
 		}
-	LOG_MSG("node_init_root: Port for %s opened successfully.", dir);
-	LOG_MSG("\tPort: 0x%lX", (unsigned long)node->nn->port);
 	
+	/*Compute the length of the name of the root node*/
+	node->nn->lnode->name_len = strlen(p);
+
 	/*Release the lock for operations on the undelying filesystem*/
 	mutex_unlock(&ulfs_lock);
 	
@@ -456,4 +486,273 @@ node_entries_get
 	return err;
 	}/*node_entries_get*/
 /*----------------------------------------------------------------------------*/
+/*Looks up `name` under 'dir' with 'flags' as open flags; return the first
+	successfully looked up port in `port` and the corresponding stat information
+	in `stat`*/
+error_t
+node_lookup_file
+	(
+	node_t * dir,
+	char * name,
+	int flags,
+	file_t * port,
+	io_statbuf_t * s
+	)
+	{
+	error_t err = ENOENT;
+	
+	/*The port to the looked up file*/
+	file_t p;
 
+	/*The stat information about the file*/
+	io_statbuf_t stat;
+	
+	/*If the port for `dir` is invalid, return the proper error*/
+	if(dir->nn->port == MACH_PORT_NULL)
+		return ENOENT;
+		
+	/*Try to lookup the specified `name`*/
+	err = file_lookup
+		(
+		dir->nn->port,
+		name,
+		flags,
+		0,	/*fall back to default flags (?)*/
+		0,
+		&p,
+		&stat
+		);
+	if(err)
+		return err;
+	
+	/*If we are asked to lookup the root node of filterfs*/
+	if
+		(
+		(stat.st_ino == underlying_node_stat.st_ino)
+		&& (stat.st_fsid == underlying_node_stat.st_fsid)
+		)
+		/*remark the fact that the requested node is our root*/
+		err = ELOOP;
+	
+	/*If no errors have been encountered*/
+	if(!err)
+		{
+		/*put the port and the stat information into the parameters*/
+		*port = p;
+		*s = stat;
+		}
+	
+	/*Return the result of performing operations*/
+	return err;
+	}/*node_lookup_file*/
+/*----------------------------------------------------------------------------*/
+/*Makes sure that all ports to the underlying filesystem of `node` are up to
+	date*/
+error_t
+node_update
+	(
+	node_t * node
+	)
+	{
+	error_t err = 0;
+
+	/*The full path to this node*/
+	char * path;
+	
+	/*Stat information for `node`*/
+	io_statbuf_t stat;
+	
+	/*The port to the file corresponding to `node`*/
+	file_t port;
+
+	/*If the specified node is the root node or if it must not be updated*/
+	if(NODE_IS_ROOT(node) || (node->nn->flags & FLAG_NODE_ULFS_FIXED))
+		/*do nothing*/
+		return err; /*return 0; actually*/
+		
+	/*Gain exclusive access to the root node of the filesystem*/
+	mutex_lock(&netfs_root_node->lock);
+	
+	/*Construct the full path to `node`*/
+	err = lnode_path_construct(node->nn->lnode, &path);
+	if(err)
+		{
+		mutex_unlock(&netfs_root_node->lock);
+		return err;
+		}
+		
+	/*Deallocate `node`'s port to the underlying filesystem*/
+	if(node->nn->port)
+		PORT_DEALLOC(node->nn->port);
+		
+	/*Try to lookup the file for `node` in its untranslated version*/
+	err = file_lookup
+		(
+		netfs_root_node->nn->port, path, O_READ | O_NOTRANS, O_NOTRANS,
+		0, &port, &stat
+		);
+	if(err)
+		{
+		node->nn->port = MACH_PORT_NULL;
+		err = 0; /*failure (?)*/
+		return err;
+		}
+	
+	/*If the node looked up is actually the root node of filterfs filesystem*/
+	if
+		(
+		(stat.st_ino == underlying_node_stat.st_ino)
+		&& (stat.st_fsid == underlying_node_stat.st_fsid)
+		)
+		/*set `err` accordingly*/
+		err = ELOOP;
+	else
+		{
+		/*deallocate the obtained port*/
+		PORT_DEALLOC(port);
+		
+		/*obtain the translated version of the required node*/
+		err = file_lookup
+			(netfs_root_node->nn->port, path, O_READ, 0, 0, &port, &stat);
+		}
+		
+	/*If there have been errors*/
+	if(err)
+		/*reset the port*/
+		port = MACH_PORT_NULL;
+		
+	/*Store the port in the node*/
+	node->nn->port = port;
+	
+	/*Remove the flag about the invalidity of the current node and set the
+		flag that the node is up-to-date*/
+	node->nn->flags &= ~FLAG_NODE_INVALIDATE;
+	node->nn->flags |= FLAG_NODE_ULFS_UPTODATE;
+	
+	/*Release the lock on the root node of filterfs filesystem*/
+	mutex_unlock(&netfs_root_node->lock);
+	
+	/*Return the result of operations*/
+	return err;
+	}/*node_update*/
+/*----------------------------------------------------------------------------*/
+/*Computes the size of the given directory*/
+error_t
+node_get_size
+	(
+	node_t * dir,
+	OFFSET_T * off
+	)
+	{
+	error_t err = 0;
+
+	/*The final size*/
+	size_t size = 0;
+	
+	/*The number of directory entries*/
+	/*int count = 0;*/
+	
+	/*The the node in the directory entries list from which we start counting*/
+	node_dirent_t * dirent_start;
+	
+	/*The currently analyzed dirent*/
+	node_dirent_t * dirent_current;
+	
+	/*The pointer to the beginning of the list of dirents*/
+	node_dirent_t * dirent_list;
+	
+	/*The first entry we have to analyze*/
+	/*int first_entry = 2;*/
+	
+	/*Takes into consideration the name of the current dirent*/
+	void
+	bump_size
+		(
+		const char * name
+		)
+		{
+		/*Increment the current size by the size of the current dirent*/
+		size += DIRENT_LEN(strlen(name));
+		
+		/*Count the current dirent*/
+		/*++count;*/
+		}/*bump_size*/
+		
+	/*Obtain the list of entries in the current directory*/
+	err = node_entries_get(dir, &dirent_list);
+	if(err)
+		return err;
+	
+	/*Obtain the pointer to the dirent which has the number first_entry*/
+	/*Actually, the first element of the list*/
+	/*This code is included in unionfs, but it's completely useless here*/
+	/*for
+		(
+		dirent_start = dirent_list, count = 2;
+		dirent_start && count < first_entry;
+		dirent_start = dirent_start->next, ++count
+		);*/
+	
+	/*Reset the count*/
+	/*count = 0;*/
+	
+	/*Make space for '.' and '..' entries*/
+	/*This code is included in unionfs, but it's completely useless here*/
+	/*if(first_entry == 0)
+		bump_size(".");
+	if(first_entry <= 1)
+		bump_size("..");*/
+	
+	/*See how much space is required for the node*/
+	for
+		(
+		dirent_current = dirent_start; dirent_current;
+		dirent_current = dirent_current->next
+		)
+		bump_size(dirent_current->dirent->d_name);
+		
+	/*Free the list of dirents*/
+	node_entries_free(dirent_list);
+	
+	/*Return the size*/
+	*off = size;
+	return 0;
+	}/*node_get_size*/
+/*----------------------------------------------------------------------------*/
+/*Remove the file called `name` under `dir`*/
+error_t
+node_unlink_file
+	(
+	node_t * dir,
+	char * name
+	)
+	{
+	error_t err = 0;
+
+	/*The port to the file which will be unlinked*/
+	mach_port_t p;
+	
+	/*Stat information about the file which will be unlinked*/
+	io_statbuf_t stat;
+	
+	/*If port corresponding to `dir` is invalid*/
+	if(dir->nn->port == MACH_PORT_NULL)
+		/*stop with an error*/
+		return ENOENT; /*FIXME: Is the return value indeed meaningful here?*/
+	
+	/*Attempt to lookup the specified file*/
+	err = file_lookup(dir->nn->port, name, O_NOTRANS, O_NOTRANS, 0, &p, &stat);
+	if(err)
+		return err;
+	
+	/*Deallocate the obtained port*/
+	PORT_DEALLOC(p);
+	
+	/*Unlink file `name` under `dir`*/
+	err = dir_unlink(dir->nn->port, name);
+	if(err)
+		return err;
+	
+	return err;
+	}/*node_unlink_file*/
+/*----------------------------------------------------------------------------*/

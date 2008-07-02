@@ -3,6 +3,8 @@
 /*----------------------------------------------------------------------------*/
 /*Management of cheap 'light nodes'*/
 /*----------------------------------------------------------------------------*/
+/*Based on the code of unionfs translator.*/
+/*----------------------------------------------------------------------------*/
 /*Copyright (C) 2001, 2002, 2005 Free Software Foundation, Inc.
   Written by Sergiu Ivanov <unlimitedscolobb@gmail.com>.
 
@@ -73,16 +75,6 @@ typedef struct lnode lnode_t;
 
 /*----------------------------------------------------------------------------*/
 /*--------Functions-----------------------------------------------------------*/
-/*----------------------------------------------------------------------------*/
-/*Creates a new lnode with `name`; the new node is locked and contains
-a single reference*/
-error_t
-lnode_create
-	(
-	char * name,
-	lnode_t ** node	/*put the result here*/
-	);
-/*----------------------------------------------------------------------------*/
 /*Adds a reference to the `lnode` (which must be locked)*/
 void
 lnode_ref_add
@@ -90,11 +82,55 @@ lnode_ref_add
 	lnode_t * node
 	);
 /*----------------------------------------------------------------------------*/
+/*Removes a reference from `node` (which must be locked). If that was the last
+	reference, destroy the node*/
+void
+lnode_ref_remove
+	(
+	lnode_t * node
+	);
+/*----------------------------------------------------------------------------*/
+/*Creates a new lnode with `name`; the new node is locked and contains
+	a single reference*/
+error_t
+lnode_create
+	(
+	char * name,
+	lnode_t ** node	/*put the result here*/
+	);
+/*----------------------------------------------------------------------------*/
 /*Destroys the given lnode*/
 void
 lnode_destroy
 	(
 	lnode_t * node	/*destroy this*/
+	);
+/*----------------------------------------------------------------------------*/
+/*Constructs the full path for the given lnode and stores the result both in
+	the parameter and inside the lnode (the same string, actually)*/
+error_t
+lnode_path_construct
+	(
+	lnode_t * node,
+	char ** path	/*store the path here*/
+	);
+/*----------------------------------------------------------------------------*/
+/*Gets a light node by its name, locks it and increments its refcount*/
+error_t
+lnode_get
+	(
+	lnode_t * dir,	/*search here*/
+	char * name,		/*search for this name*/
+	lnode_t ** node	/*put the result here*/
+	);
+/*----------------------------------------------------------------------------*/
+/*Install the lnode into the lnode tree: add a reference to `dir` (which must
+	be locked)*/
+void
+lnode_install
+	(
+	lnode_t * dir,	/*install here*/
+	lnode_t * node	/*install this*/
 	);
 /*----------------------------------------------------------------------------*/
 #endif /*__LNODE_H__*/

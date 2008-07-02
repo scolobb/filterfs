@@ -3,6 +3,8 @@
 /*----------------------------------------------------------------------------*/
 /*The definitions for the filtering translator*/
 /*----------------------------------------------------------------------------*/
+/*Based on the code of unionfs translator.*/
+/*----------------------------------------------------------------------------*/
 /*Copyright (C) 2001, 2002, 2005 Free Software Foundation, Inc.
   Written by Sergiu Ivanov <unlimitedscolobb@gmail.com>.
 
@@ -55,6 +57,9 @@ extern volatile struct mapped_time_value * filterfs_maptime;
 /*----------------------------------------------------------------------------*/
 /*A port to the underlying node*/
 extern mach_port_t underlying_node;
+/*----------------------------------------------------------------------------*/
+/*The stat information about the underlying node*/
+extern io_statbuf_t underlying_node_stat;
 /*----------------------------------------------------------------------------*/
 
 /*----------------------------------------------------------------------------*/
@@ -184,13 +189,25 @@ netfs_attempt_create_file
 	struct node ** node
 	);
 /*----------------------------------------------------------------------------*/
+/*A local function for attempting to create a file; we create this because we
+	use a custom netfs_S_dir_lookup*/
+error_t
+netfs_attempt_create_file_reduced
+	(
+	struct iouser * user,
+	struct node * dir,
+	char * name,
+	mode_t mode,
+	int flags
+	);
+/*----------------------------------------------------------------------------*/
 /*Returns an error if the process of opening a file should not be allowed
 	to complete because of insufficient permissions*/
 error_t
 netfs_check_open_permissions
 	(
 	struct iouser * user,
-	struct node * node,
+	struct node * np,
 	int flags,
 	int newnode
 	);
@@ -218,7 +235,7 @@ netfs_report_access
 error_t
 netfs_validate_stat
 	(
-	struct node * node,
+	struct node * np,
 	struct iouser * cred
 	);
 /*----------------------------------------------------------------------------*/
@@ -245,7 +262,7 @@ netfs_get_dirents
 	int * data_entries
 	);
 /*----------------------------------------------------------------------------*/
-/*Looks up `name` in `dir` for `user`*/
+/*Looks up `name` under `dir` for `user` (not used here)*/
 error_t
 netfs_attempt_lookup
 	(
@@ -253,6 +270,38 @@ netfs_attempt_lookup
 	struct node * dir,
 	char * name,
 	struct node ** node
+	);
+/*----------------------------------------------------------------------------*/
+/*Performs an improved look up of `name` under `dir` for `user`*/
+error_t
+netfs_attempt_lookup_improved
+	(
+	struct iouser * user,
+	struct node * dir,
+	char * name,
+	struct node ** np,
+	int flags,
+	int lastcomp,					/*1 if we are at the last component of the path(?)*/
+	mach_port_t * port,
+	mach_msg_type_name_t * port_type
+	);
+/*----------------------------------------------------------------------------*/
+/*A special implementation of netfs_S_dir_lookup, because libnetfs does not
+	know about cases in which the server wants to return (foreign) ports exactly
+	to the user, instead of usual node structures.
+	This comment was taken from the code for unionfs, and the things stated here
+	might not be valid now (2008/06/30).*/
+error_t
+netfs_S_dir_lookup
+	(
+	struct protid * diruser,
+	char * filename,
+	int flags,
+	mode_t mode,
+	retry_type * do_retry,
+	char * retry_name,
+	mach_port_t * retry_port,
+	mach_msg_type_name_t * retry_port_type
 	);
 /*----------------------------------------------------------------------------*/
 /*Deletes `name` in `dir` for `user`*/

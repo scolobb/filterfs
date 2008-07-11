@@ -99,6 +99,34 @@ node_create
 	return err;
 	}/*node_create*/
 /*----------------------------------------------------------------------------*/
+/*Destroys the specified node and removes a light reference from the
+	associated light node*/
+void
+node_destroy
+	(
+	node_t * np
+	)
+	{
+	/*Die if the node does not belong to node cache*/
+	assert(!np->nn->ncache_next || !np->nn->ncache_prev);
+	
+	/*Destroy the port to the underlying filesystem allocated to the node*/
+	PORT_DEALLOC(np->nn->port);
+	
+	/*Lock the lnode corresponding to the current node*/
+	mutex_lock(&np->nn->lnode->lock);
+	
+	/*Orphan the light node*/
+	np->nn->lnode->node = NULL;
+	
+	/*Remove a reference from the lnode*/
+	lnode_ref_remove(np->nn->lnode);
+	
+	/*Free the netnode and the node itself*/
+	free(np->nn);
+	free(np);
+	}/*node_destroy*/
+/*----------------------------------------------------------------------------*/
 /*Creates the root node and the corresponding lnode*/
 error_t
 node_create_root
@@ -159,9 +187,28 @@ node_init_root
 		/*set the error code accordingly*/
 		err = errno;
 		LOG_MSG("node_init_root: Could not open the port for %s.", dir);
+		
+		/*release the lock and stop*/
+		mutex_unlock(&ulfs_lock);
+		return err;
 		}
+
 	LOG_MSG("node_init_root: Port for %s opened successfully.", dir);
 	LOG_MSG("\tPort: 0x%lX", (unsigned long)node->nn->port);
+	
+	/*Stat the root node*/
+	err = io_stat(node->nn->port, &node->nn_stat);
+	if(err)
+		{
+		/*deallocate the port*/
+		PORT_DEALLOC(node->nn->port);
+		
+		LOG_MSG("node_init_root: Could not stat the root node.");
+		
+		/*unlock the mutex and exit*/
+		mutex_unlock(&ulfs_lock);
+		return err;
+		}
 	
 	/*Set the path to the corresponding lnode to `dir`*/
 	node->nn->lnode->path = strdup(dir);
@@ -264,17 +311,26 @@ node_entries_get
 	{
 	error_t err = 0;
 
+	/*Obtain the path to the current node*/
+	char * path_to_node = node->nn->lnode->path;
+	
 	/*The number of PROPERTY_PARAMs in the property*/
 	int param_entries_count = 0;
 	
 	/*The length of the property*/
-	size_t property_len = strlen(property);
+	size_t property_len = (property) ? (strlen(property)) : (0);
 	
 	/*The length of PROPERTY_PARAM*/
 	size_t property_param_len = strlen(PROPERTY_PARAM);
 
+	/*The full name and the filtering command*/
+	char * full_name = NULL, * cmd = NULL;
+
+	/*The lengths of the full name and the filtering command in chunks*/
+	size_t full_name_size = 1, cmd_size = 1;
+
 	/*If some property was indeed specified*/
-	if(property && (property_len != 0))
+	if(property_len != 0)
 		{
 		/*the pointer to the current occurrence of PROPERTY_PARAM*/
 		char * occurrence = strstr(property, PROPERTY_PARAM);
@@ -283,11 +339,20 @@ node_entries_get
 		for(; occurrence;
 			occurrence = strstr(occurrence + 1, PROPERTY_PARAM),
 			++param_entries_count);
+
+		/*try allocate the memory for the fullname and the filtering command*/
+		full_name = malloc(full_name_size * STRING_CHUNK);
+		if(!full_name)
+			return ENOMEM;
+
+		cmd = malloc(cmd_size * STRING_CHUNK);
+		if(!cmd)
+			{
+			free(full_name);
+			return ENOMEM;
+			}
 		}
 
-	/*Obtain the path to the current node*/
-	char * path_to_node = node->nn->lnode->path;
-	
 	/*Obtain the length of the path*/
 	size_t pathlen = strlen(path_to_node);
 
@@ -301,20 +366,41 @@ node_entries_get
 		{
 		/*If there is no property*/
 		if(!property)
-			/*no filtering will be applied*/
-			return 1;
+			/*no filtering will be applied, any name is OK*/
+			return 0;
 		
 		/*Everything OK at first*/
 		err = 0;
 		
-		/*Allocate the space for the path to name, separator and name*/
-		char * full_name = malloc((pathlen + 1 + strlen(name) + 1) * sizeof(char));
-		if(!full_name)
+		/*Compute the length of the full name once*/
+		size_t full_name_len = pathlen + 1 + strlen(name) + 1;
+
+		/*See how much space (in chunks) is required for the full name*/
+		int chunks = full_name_size;
+		for(; full_name_len > chunks * STRING_CHUNK; ++chunks);
+		
+		/*If more memory is requied*/
+		if(chunks > full_name_size)
 			{
-			err = ENOMEM;
-			return 0; /*no meaning here*/
-			}
+			/*free the old full name*/
+			free(full_name);
+
+			/*try to allocate the new memory*/
+			full_name = malloc(chunks * STRING_CHUNK);
+			if(!full_name)
+				{
+				err = ENOMEM;
+				free(cmd); /*the string for the command is definitely allocated here*/
+				return 0;
+				}
 			
+			/*store the new size*/
+			full_name_size = chunks;
+			}
+		
+		/*Initialize `full_name` as a valid string*/
+		full_name[0] = 0;
+		
 		/*Construct the full name*/
 		strcpy(full_name, path_to_node);
 		strcat(full_name, "/");
@@ -326,14 +412,31 @@ node_entries_get
 		size_t sz = property_len + (strlen(full_name) - property_param_len)
 			* param_entries_count;
 		
-		/*Allocate memory for the filtering command*/
-		char * cmd = malloc(sz * sizeof(char));
-		if(!cmd)
+		/*See how much space (in chunks) is required for the command*/
+		for(chunks = cmd_size; sz > chunks * STRING_CHUNK; ++chunks);
+		
+		/*If more memory is requied*/
+		if(chunks > cmd_size)
 			{
-			err = ENOMEM;
-			free(full_name);
-			return 0; /*no meaning here*/
+			/*free the old command*/
+			free(cmd);
+
+			/*try to allocate the new memory*/
+			cmd = malloc(chunks * STRING_CHUNK);
+			if(!cmd)
+				{
+				err = ENOMEM;
+				free(full_name);	/*the string for the full name is
+														definitely allocated here*/
+				return 0;
+				}
+			
+			/*store the new size*/
+			cmd_size = chunks;
 			}
+
+		/*Initialize `cmd` as a valid string*/
+		cmd[0] = 0;
 			
 		/*The current occurence of PROPERTY_PARAM in property*/
 		char * p = strstr(property, PROPERTY_PARAM);
@@ -366,10 +469,6 @@ node_entries_get
 		/*Execute the command*/
 		int xcode = WEXITSTATUS(system(cmd));
 		
-		/*Free the strings*/
-		free(full_name);
-		free(cmd);
-		
 		/*Return the exit code of the command*/
 		return xcode;
 		}/*check_property*/
@@ -400,7 +499,7 @@ node_entries_get
 	/*The new dirent*/
 	struct dirent * dirent_new;
 	
-	LOG_MSG("node_entries_get: Getting entries for %p", node);
+	/*LOG_MSG("node_entries_get: Getting entries for %p", node);*/
 
 	/*The name of the current dirent*/
 	char * name;
@@ -418,7 +517,7 @@ node_entries_get
 	for(dirent = dirent_list; *dirent; ++dirent)
 		{
 		/*obtain the name of the current dirent*/
-		name = (char *)(*dirent + 1);
+		name = &((*dirent)->d_name[0]);
 		
 		/*If the current dirent is either '.' or '..', skip it*/
 		if((strcmp(name, ".") == 0) ||	(strcmp(name, "..") == 0))
@@ -481,6 +580,12 @@ node_entries_get
 	
 	/*Free the results of listing the dirents*/
 	munmap(dirent_data, dirent_data_size);
+
+	/*Free the full name and the command (if these are present at all)*/
+	if(full_name)
+		free(full_name);
+	if(cmd)
+		free(cmd);
 	
 	/*Return the result of operations*/
 	return err;
@@ -653,13 +758,13 @@ node_get_size
 	/*int count = 0;*/
 	
 	/*The the node in the directory entries list from which we start counting*/
-	node_dirent_t * dirent_start;
+	/*node_dirent_t * dirent_start = NULL;*/
 	
 	/*The currently analyzed dirent*/
-	node_dirent_t * dirent_current;
+	node_dirent_t * dirent_current = NULL;
 	
 	/*The pointer to the beginning of the list of dirents*/
-	node_dirent_t * dirent_list;
+	node_dirent_t * dirent_list = NULL;
 	
 	/*The first entry we have to analyze*/
 	/*int first_entry = 2;*/
@@ -706,7 +811,7 @@ node_get_size
 	/*See how much space is required for the node*/
 	for
 		(
-		dirent_current = dirent_start; dirent_current;
+		dirent_current = dirent_list/*dirent_start*/; dirent_current;
 		dirent_current = dirent_current->next
 		)
 		bump_size(dirent_current->dirent->d_name);

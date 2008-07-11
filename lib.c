@@ -30,6 +30,7 @@
 #include <sys/mman.h>
 /*----------------------------------------------------------------------------*/
 #include "lib.h"
+#include "debug.h"
 /*----------------------------------------------------------------------------*/
 
 /*----------------------------------------------------------------------------*/
@@ -82,40 +83,16 @@ dir_entries_get
 	/*The current directory entry*/
 	struct dirent * dp;
 
-	/*The pointer to the current position in data*/
-	char * p;
-
 	int i;
 	
-/*Today (2008/06/27) it appears that the data returned by dir_readdir looks in
-	the following way:
-
-	dirent, name, dirent, name, ...
-	
-	So, I won't use the code from unionfs, since it doesn't yield reasonable
-	results.*/
-
 	/*Go through every element of the list of dirents*/
-	for(i = 0, dp = (struct dirent *)data; i < entries_num;	++i)
-		{
-		/*add the current dirent to the list*/
+	for
+		(
+		i = 0, dp = (struct dirent *)data;
+		i < entries_num;
+		++i, dp = (struct dirent *)((char *)dp + dp->d_reclen))
+		/*copy the current value into the list*/
 		*(list + i) = dp;
-		
-		/*advance the dirent pointer*/
-		++dp;
-		
-		/*find the end of the name of the current dirent*/
-		for(p = (char *)dp; *p && (p - data < data_size); ++p);
-		
-		/*put p beyond the trailing '\0'*/
-		++p;
-		
-		/*align p - data at the borders of sizeof(int)*/
-		p = data + ALIGN(p - data, sizeof(int));
-		
-		/*set the dp to point at the beginning of the next dirent*/
-		dp = (struct dirent *)p;
-		}
 	
 	/*Nullify the last element of the list*/
 	*(list + i) = NULL;

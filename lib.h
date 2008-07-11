@@ -27,6 +27,8 @@
 #define __LIB_H__
 
 /*----------------------------------------------------------------------------*/
+#define __USE_FILE_OFFSET64
+/*----------------------------------------------------------------------------*/
 #include <hurd.h>
 #include <dirent.h>
 #include <stddef.h>
@@ -45,9 +47,6 @@
 #define DIRENT_LEN(name_len)\
 	((DIRENT_NAME_OFFS + (name_len) + 1 + DIRENT_ALIGN - 1) &\
 	~(DIRENT_ALIGN - 1))
-/*----------------------------------------------------------------------------*/
-/*Aligns the first parameter to the stride specified by the second parameter*/
-#define ALIGN(x, stride) (((x) + (stride) - 1) & ~((stride) - 1))
 /*----------------------------------------------------------------------------*/
 /*Deallocate the given port for the current task*/
 #define PORT_DEALLOC(p) (mach_port_deallocate(mach_task_self(), (p)))

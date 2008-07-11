@@ -28,6 +28,7 @@
 #define _GNU_SOURCE
 /*----------------------------------------------------------------------------*/
 #include "lnode.h"
+#include "debug.h"
 /*----------------------------------------------------------------------------*/
 
 /*----------------------------------------------------------------------------*/
@@ -60,7 +61,7 @@ lnode_ref_remove
 	/*If there are no references remaining*/
 	if(node->references == 0)
 		{
-		/**/
+		/*TODO: destroy the lnode*/
 		}
 	else
 		/*simply unlock the node*/
@@ -148,13 +149,13 @@ lnode_path_construct
 	char ** path	/*store the path here*/
 	)
 	{
-	error_t err;
+	error_t err = 0;
 
 	/*The final path*/
 	char * p;
 	
 	/*The final length of the path*/
-	int p_len = 1;
+	int p_len = 0;
 	
 	/*A temporary pointer to an lnode*/
 	lnode_t * n;
@@ -163,7 +164,14 @@ lnode_path_construct
 	for(n = node; n && n->dir; n = n->dir)
 		/*add the length of the name of `n` to `p_len` make some space for
 			the delimiter '/', if we are not approaching the root node*/
-		p_len += n->name_len + ((n->dir->dir) ? (1) : (0));
+		/*p_len += n->name_len + ((n->dir->dir) ? (1) : (0));*/
+		/*There is some path to our root node, so we will anyway have to
+			add a '/'*/
+		p_len += n->name_len + 1;
+		
+	/*Include the space for the path to the root node of the filterfs
+		(n is now the root of the filesystem)*/
+	p_len += strlen(n->path) + 1;
 		
 	/*Try to allocate the space for the string*/
 	p = malloc(p_len * sizeof(char));
@@ -186,9 +194,15 @@ lnode_path_construct
 			
 			/*If we are not at the root node of the filterfs filesystem, add the
 				separator*/
-			if(n->dir->dir)
-				p[--p_len] = '/';
+			/*if(n->dir->dir)
+				p[--p_len] = '/';*/
+			/*we anyway have to add the separator slash*/
+			p[--p_len] = '/';
 			}
+		
+		/*put the path to the root node at the beginning of the first path
+			(n is at the root now)*/
+		strncpy(p, n->path, strlen(n->path));
 		
 		/*destroy the former path in lnode, if it exists*/
 		if(node->path)
@@ -198,7 +212,8 @@ lnode_path_construct
 		node->path = p;
 
 		/*store the path in the parameter*/
-		*path = p;
+		if(path)
+			*path = p;
 		}
 		
 	/*Return the result of operations*/
@@ -220,7 +235,7 @@ lnode_get
 	lnode_t * n;
 	
 	/*Find `name` among the names of entries in `dir`*/
-	for(n = dir->entries; n && (strcmp(n->name, name) != 0); n = n->next)
+	for(n = dir->entries; n && (strcmp(n->name, name) != 0); n = n->next);
 	
 	/*If the search has been successful*/
 	if(n)

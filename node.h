@@ -37,7 +37,7 @@
 /*----------------------------------------------------------------------------*/
 /*--------Macros--------------------------------------------------------------*/
 /*Checks whether the give node is the root of the filterfs filesystem*/
-#define NODE_IS_ROOT(n) (((n)->nn->lnode->dir) ? (1) : (0))
+#define NODE_IS_ROOT(n) (((n)->nn->lnode->dir) ? (0) : (1))
 /*----------------------------------------------------------------------------*/
 /*Node flags*/
 #define FLAG_NODE_ULFS_FIXED 		0x00000001	/*this node should not be updated*/
@@ -50,6 +50,10 @@
 #else
 #	define OFFSET_T __off_t
 #endif /*__USE_FILE_OFFSET64*/
+/*----------------------------------------------------------------------------*/
+/*The size of a chunk of a string (for a small optimization in checking
+	the property)*/
+#define STRING_CHUNK 256
 /*----------------------------------------------------------------------------*/
 
 /*----------------------------------------------------------------------------*/
@@ -98,6 +102,14 @@ node_create
 	(
 	lnode_t * lnode,
 	node_t ** node	/*store the result here*/
+	);
+/*----------------------------------------------------------------------------*/
+/*Destroys the specified node and removes a light reference from the
+	associated light node*/
+void
+node_destroy
+	(
+	node_t * np
 	);
 /*----------------------------------------------------------------------------*/
 /*Creates the root node and the corresponding lnode*/

@@ -180,8 +180,8 @@ argp_parse_common_options
 			/*for(i = strlen(dir) - 1; (i >= 0) && (dir[i] == ' '); dir[i--] = 0);*/
 				/*the original filename may contain spaces*/
 			
-			/*if the last non blank symbol is a '/'*/
-			if(dir[i] == '/')
+			/*If the last non blank symbol is a '/' and it's not the only one*/
+			if((dir[i] == '/') && (i != 0))
 				/*put 0 instead*/
 				dir[i] = 0;
 				

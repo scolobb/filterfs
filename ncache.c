@@ -70,7 +70,7 @@ ncache_node_lookup
 	node_t ** node		/*put the result here*/
 	)
 	{
-	error_t err;
+	error_t err = 0;
 
 	/*Obtain the pointer to the node corresponding to `lnode`*/
 	node_t * n = lnode->node;

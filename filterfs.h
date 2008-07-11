@@ -25,11 +25,9 @@
 /*----------------------------------------------------------------------------*/
 #ifndef __FILTERFS_H__
 #define __FILTERFS_H__
-
 /*----------------------------------------------------------------------------*/
 #include <stddef.h>
 #include <stdlib.h>
-#include <dirent.h>
 #include <cthreads.h>
 #include <unistd.h>
 #include <sys/mman.h>
@@ -40,6 +38,7 @@
 #include <hurd/ihash.h>
 #include <hurd/iohelp.h>
 /*----------------------------------------------------------------------------*/
+#include "lib.h"
 #include "node.h"
 /*----------------------------------------------------------------------------*/
 
@@ -52,8 +51,8 @@
 /*----------------------------------------------------------------------------*/
 /*--------Global Variables----------------------------------------------------*/
 /*A mapped time value for filterfs*/
-/*Required for a very fast access to time (?)*/
-extern volatile struct mapped_time_value * filterfs_maptime;
+/*Required for a very fast access to time*/
+extern volatile struct mapped_time_value * maptime;
 /*----------------------------------------------------------------------------*/
 /*A port to the underlying node*/
 extern mach_port_t underlying_node;
@@ -227,7 +226,7 @@ error_t
 netfs_report_access
 	(
 	struct iouser * cred,
-	struct node * node,
+	struct node * np,
 	int * types
 	);
 /*----------------------------------------------------------------------------*/
@@ -262,7 +261,7 @@ netfs_get_dirents
 	int * data_entries
 	);
 /*----------------------------------------------------------------------------*/
-/*Looks up `name` under `dir` for `user` (not used here)*/
+/*Looks up `name` under `dir` for `user`*/
 error_t
 netfs_attempt_lookup
 	(
@@ -492,7 +491,7 @@ netfs_attempt_write
 void
 netfs_node_norefs
 	(
-	struct node * node
+	struct node * np
 	);
 /*----------------------------------------------------------------------------*/
 #endif

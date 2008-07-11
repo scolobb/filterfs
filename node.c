@@ -591,66 +591,6 @@ node_entries_get
 	return err;
 	}/*node_entries_get*/
 /*----------------------------------------------------------------------------*/
-/*Looks up `name` under 'dir' with 'flags' as open flags; return the first
-	successfully looked up port in `port` and the corresponding stat information
-	in `stat`*/
-error_t
-node_lookup_file
-	(
-	node_t * dir,
-	char * name,
-	int flags,
-	file_t * port,
-	io_statbuf_t * s
-	)
-	{
-	error_t err = ENOENT;
-	
-	/*The port to the looked up file*/
-	file_t p;
-
-	/*The stat information about the file*/
-	io_statbuf_t stat;
-	
-	/*If the port for `dir` is invalid, return the proper error*/
-	if(dir->nn->port == MACH_PORT_NULL)
-		return ENOENT;
-		
-	/*Try to lookup the specified `name`*/
-	err = file_lookup
-		(
-		dir->nn->port,
-		name,
-		flags,
-		0,	/*fall back to default flags (?)*/
-		0,
-		&p,
-		&stat
-		);
-	if(err)
-		return err;
-	
-	/*If we are asked to lookup the root node of filterfs*/
-	if
-		(
-		(stat.st_ino == underlying_node_stat.st_ino)
-		&& (stat.st_fsid == underlying_node_stat.st_fsid)
-		)
-		/*remark the fact that the requested node is our root*/
-		err = ELOOP;
-	
-	/*If no errors have been encountered*/
-	if(!err)
-		{
-		/*put the port and the stat information into the parameters*/
-		*port = p;
-		*s = stat;
-		}
-	
-	/*Return the result of performing operations*/
-	return err;
-	}/*node_lookup_file*/
-/*----------------------------------------------------------------------------*/
 /*Makes sure that all ports to the underlying filesystem of `node` are up to
 	date*/
 error_t

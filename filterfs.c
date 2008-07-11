@@ -558,6 +558,120 @@ netfs_attempt_lookup
 		return err;
 		}
 
+	/*Checks whether the given name satisfied the required property*/
+	int
+	check_property
+		(
+		const char * name
+		)
+		{
+		/*If there is no property*/
+		if(!property)
+			/*no filtering will be applied, any name is OK*/
+			return 0;
+		
+		/*The number of occurrences of PROPERTY_PARAM in the property*/
+		int param_entries_count = 0;
+
+		/*The pointer to the current occurrence of PROPERTY_PARAM*/
+		char * occurrence = strstr(property, PROPERTY_PARAM);
+		
+		/*Count the number of occurrences*/
+		for(; occurrence;
+			occurrence = strstr(occurrence + 1, PROPERTY_PARAM),
+			++param_entries_count);
+		
+		/*Compute the length of the property param*/
+		size_t property_param_len = strlen(PROPERTY_PARAM);
+		
+		/*The length of the property*/
+		size_t property_len = (property) ? (strlen(property)) : (0);
+	
+		/*Everything OK at first*/
+		err = 0;
+		
+		/*Compute the length of the full name once*/
+		size_t full_name_len = strlen(dir->nn->lnode->path) + 1 + strlen(name) + 1;
+		
+		/*Try to allocate the required space*/
+		char * full_name = malloc(full_name_len);
+		if(!full_name)
+			{
+			err = ENOMEM;
+			return 0;
+			}
+		
+		/*Initialize `full_name` as a valid string*/
+		full_name[0] = 0;
+		
+		/*Construct the full name*/
+		strcpy(full_name, dir->nn->lnode->path);
+		strcat(full_name, "/");
+		strcat(full_name, name);
+		
+		LOG_MSG("netfs_attempt_lookup: Applying filter to %s...", full_name);
+		
+		/*Compute the space required for the final filtering command*/
+		size_t sz = property_len + (strlen(full_name) - property_param_len)
+			* param_entries_count;
+		
+		/*Try to allocate the space for the command*/
+		char * cmd = malloc(sz);
+		if(!cmd)
+			{
+			free(full_name);
+			err = ENOMEM;
+			return 0;
+			}
+		
+		/*Initialize `cmd` as a valid string*/
+		cmd[0] = 0;
+			
+		/*The current occurence of PROPERTY_PARAM in property*/
+		char * p = strstr(property, PROPERTY_PARAM);
+		
+		/*The pointer to the current position in the property*/
+		char * propp = property;
+		
+		/*While the command has not been constructed*/
+		for(; p; p = strstr(propp, PROPERTY_PARAM))
+			{
+			/*add the new part of the property to the command*/
+			strncat(cmd, propp, p - propp);
+			
+			/*add the filename to the command*/
+			strcat(cmd, full_name);
+			
+			/*LOG_MSG("\tcmd = '%s'", cmd);*/
+
+			/*advance the pointer in the property*/
+			propp = p + property_param_len;
+
+			/*LOG_MSG("\tpropp points at '%s'", propp);*/
+			}
+		
+		/*Copy the rest of the property to the command*/
+		strcat(cmd, propp);
+		
+		/*LOG_MSG("node_entries_get: The filtering command: '%s'.", cmd);*/
+
+		/*Execute the command*/
+		int xcode = WEXITSTATUS(system(cmd));
+		
+		/*Return the exit code of the command*/
+		return xcode;
+		}/*check_property*/
+
+	/*If the given name does not satisfy the property*/
+	if(check_property(name) != 0)
+		{
+		/*unlock the directory*/
+		mutex_unlock(&dir->lock);
+
+		/*no such file in the directory*/
+		return ENOENT;
+		}
+
 	/*Try to lookup the given file in the underlying directory*/
 	mach_port_t p = file_name_lookup_under(dir->nn->port, name, 0, 0);
 	
@@ -946,7 +1060,7 @@ error_t
 netfs_attempt_read
 	(
 	struct iouser * cred,
-	struct node * node,
+	struct node * np,
 	loff_t offset,
 	size_t * len,
 	void * data
@@ -954,9 +1068,39 @@ netfs_attempt_read
 	{
 	LOG_MSG("netfs_attempt_read");
 
-	/*Say that nothing has been read successfully*/
-	*len = 0;
-	return 0;
+	error_t err = 0;
+
+	/*If there is no port open for the current node*/
+	if(np->nn->port == MACH_PORT_NULL)
+		{
+		/*the parent node of the current node*/
+		node_t * dnp;
+
+		/*obtain the parent node of the the current node*/
+		err = ncache_node_lookup(np->nn->lnode->dir, &dnp);
+		
+		/*the lookup should never fail here*/
+		assert(!err);
+		
+		/*open a port to the file we are interested in*/
+		mach_port_t p = file_name_lookup_under
+			(dnp->nn->port, np->nn->lnode->name, O_READ, 0);
+
+		/*put `dnp` back, since we don't need it any more*/
+		netfs_nput(dnp);
+
+		if(!p)
+			return EBADF;
+			
+		/*store the port in the node*/
+		np->nn->port = p;
+		}
+		
+	/*Read the required data from the file*/
+	err = io_read(np->nn->port, (char **)&data, len, offset, *len);
+
+	/*Return the result of reading*/
+	return err;
 	}/*netfs_attempt_read*/
 /*----------------------------------------------------------------------------*/
 /*Writes to file `node` up to `len` bytes from offset from `data`*/

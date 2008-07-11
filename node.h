@@ -141,19 +141,6 @@ node_entries_get
 	node_dirent_t ** dirents /*store the result here*/
 	);
 /*----------------------------------------------------------------------------*/
-/*Looks up `name` under 'dir' with 'flags' as open flags; return the first
-	successfully looked up port in `port` and the corresponding stat information
-	in `stat`*/
-error_t
-node_lookup_file
-	(
-	node_t * dir,
-	char * name,
-	int flags,
-	file_t * port,
-	io_statbuf_t * s
-	);
-/*----------------------------------------------------------------------------*/
 /*Makes sure that all ports to the underlying filesystem of `node` are up to
 	date*/
 error_t

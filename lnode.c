@@ -61,7 +61,9 @@ lnode_ref_remove
 	/*If there are no references remaining*/
 	if(node->references == 0)
 		{
-		/*TODO: destroy the lnode*/
+		/*uninstall the node from the directory it is in and destroy it*/
+		lnode_uninstall(node);
+		lnode_destroy(node);
 		}
 	else
 		/*simply unlock the node*/
@@ -160,7 +162,7 @@ lnode_path_construct
 	/*A temporary pointer to an lnode*/
 	lnode_t * n;
 	
-	/*While the root node of the filterfs filesystem has not been reached*/
+	/*While the root node of the proxy filesystem has not been reached*/
 	for(n = node; n && n->dir; n = n->dir)
 		/*add the length of the name of `n` to `p_len` make some space for
 			the delimiter '/', if we are not approaching the root node*/
@@ -169,7 +171,7 @@ lnode_path_construct
 			add a '/'*/
 		p_len += n->name_len + 1;
 		
-	/*Include the space for the path to the root node of the filterfs
+	/*Include the space for the path to the root node of the proxy
 		(n is now the root of the filesystem)*/
 	p_len += strlen(n->path) + 1;
 		
@@ -183,7 +185,7 @@ lnode_path_construct
 		/*put a terminal 0 at the end of the path*/
 		p[--p_len] = 0;
 		
-		/*While the root node of the filterfs filesystem has not been reached*/
+		/*While the root node of the proxy filesystem has not been reached*/
 		for(n = node; n && n->dir; n = n->dir)
 			{
 			/*compute the position where the name of `n` is to be inserted*/
@@ -192,7 +194,7 @@ lnode_path_construct
 			/*copy the name of the node into the path (omit the terminal 0)*/
 			strncpy(p + p_len, n->name, n->name_len);
 			
-			/*If we are not at the root node of the filterfs filesystem, add the
+			/*If we are not at the root node of the proxy filesystem, add the
 				separator*/
 			/*if(n->dir->dir)
 				p[--p_len] = '/';*/
@@ -279,4 +281,92 @@ lnode_install
 	/*Setup the `dir` link in node*/
 	node->dir = dir;
 	}/*lnode_install*/
+/*----------------------------------------------------------------------------*/
+/*Unistall the node from the node tree; remove a reference from the lnode
+	containing `node`*/
+void
+lnode_uninstall
+	(
+	lnode_t * node
+	)
+	{
+	/*Remove a reference from the parent*/
+	lnode_ref_remove(node->dir);
+	
+	/*Make the next pointer in the previous element point to the element,
+		which follows `node`*/
+	*node->prevp = node->next;
+
+	/*If the current node is not the last one, connect the list after removal
+		of the current node*/
+	if(node->next)
+		node->next->prevp = &node->next;
+	}/*lnode_uninstall*/
+/*----------------------------------------------------------------------------*/
+/*Constructs a list of translators that were set on the ancestors of `node`*/
+error_t
+lnode_list_translators
+	(
+	lnode_t * node,
+	char ** trans,	/*the malloced list of 0-separated strings*/
+	size_t * ntrans	/*the number of elements in `trans`*/
+	)
+	{
+	/*The size of block of memory for the list of translators*/
+	size_t sz = 0;
+	
+	/*Used for tracing the lineage of `node`*/
+	lnode_t * ln = node;
+	
+	/*Used in computing the lengths of lists of translators in every node
+		we will go through and for constructing the final list of translators*/
+	char * p;
+	
+	/*The current position in *data (used in filling out the list of
+		translators)*/
+	char * transp;
+	
+	/*The length of the current translator name*/
+	size_t complen;
+	
+	size_t i;
+	
+	/*Trace the lineage of the `node` (including itself) and compute the
+		total length of the list of translators*/
+	for(; ln; sz += ln->translen, ln = ln->dir);
+	
+	/*Try to allocate a block of memory sufficient for storing the list of
+		translators*/
+	*trans = malloc(sz);
+	if(!*trans)
+		return ENOMEM;
+	
+	/*No translators at first*/
+	*ntrans = 0;
+	
+	/*Again trace the lineage of the `node` (including itself)*/
+	for(transp = *trans + sz, ln = node; ln; ln = ln->dir)
+		{
+		/*Go through each translator name in the list of names*/
+		for(i = 0, p = ln->trans + ln->translen - 2; i < ln->ntrans; ++i)
+			{
+			/*position p at the beginning of the current component and
+				compute its length at the same time*/
+			for(complen = 0; *p; --p, ++complen);
+			--p;
+			
+			/*move the current position backwards*/
+			transp -= complen + 1;
+
+			/*copy the current translator name into the list*/
+			strcpy(transp, p + 2);
+			
+			/*we've got another translator*/
+			++*ntrans;
+			}
+		}
+		
+	/*Everything OK*/
+	return 0;
+	}/*lnode_list_translators*/
 /*----------------------------------------------------------------------------*/

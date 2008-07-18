@@ -33,16 +33,16 @@
 /*----------------------------------------------------------------------------*/
 /*--------Macros--------------------------------------------------------------*/
 /*Print debug messages here*/
-#define DEBUG_OUTPUT "/var/tmp/filterfs.dbg"
+#define DEBUG_OUTPUT "/var/log/nsmux.dbg"
 /*----------------------------------------------------------------------------*/
 #ifdef DEBUG
 	/*Initializes the log*/
-#	define INIT_LOG() filterfs_dbg = fopen(DEBUG_OUTPUT, "wt")
+#	define INIT_LOG() nsmux_dbg = fopen(DEBUG_OUTPUT, "wt")
 	/*Closes the log*/
-# define CLOSE_LOG() fclose(filterfs_dbg)
+# define CLOSE_LOG() fclose(nsmux_dbg)
 	/*Prints a debug message and flushes the debug output*/
-#	define LOG_MSG(fmt, args...) {fprintf(filterfs_dbg, fmt"\n", ##args);\
-		fflush(filterfs_dbg);}
+#	define LOG_MSG(fmt, args...) {fprintf(nsmux_dbg, fmt"\n", ##args);\
+		fflush(nsmux_dbg);}
 #else
 	/*Remove requests for debugging output*/
 #	define INIT_LOG()
@@ -54,7 +54,7 @@
 /*----------------------------------------------------------------------------*/
 /*--------Global Variables----------------------------------------------------*/
 /*The file to write debugging info to*/
-extern FILE * filterfs_dbg;
+extern FILE * nsmux_dbg;
 /*----------------------------------------------------------------------------*/
 
 #endif /*__DEBUG_H__*/

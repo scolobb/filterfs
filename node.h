@@ -36,7 +36,7 @@
 
 /*----------------------------------------------------------------------------*/
 /*--------Macros--------------------------------------------------------------*/
-/*Checks whether the give node is the root of the proxy filesystem*/
+/*Checks whether the give node is the root of the filterfs filesystem*/
 #define NODE_IS_ROOT(n) (((n)->nn->lnode->dir) ? (0) : (1))
 /*----------------------------------------------------------------------------*/
 /*Node flags*/

@@ -40,9 +40,8 @@
 /*--------Macros--------------------------------------------------------------*/
 /*Short documentation for argp*/
 #define ARGS_DOC	"DIR"
-#define DOC 			"Provides namespace-based translator selection."\
-	" You can dynamically obtain the file 'file' translated by translator"\
-	" 'x' using the syntax: 'file,,x'."
+#define DOC 			"Shows the contents of DIR filtered according to PROPERTY.\
+ If DIR is not specified, ~/ is assumed."
 /*----------------------------------------------------------------------------*/
 
 /*----------------------------------------------------------------------------*/
@@ -73,7 +72,7 @@ argp_parse_startup_options
 /*This variable is set to a non-zero value after the parsing of starup options
 	is finished*/
 /*Whenever the argument parser is later called to modify the
-	options of the root node will be initialized accordingly directly
+	options of filterfs the root node will be initialized accordingly directly
 	by the parser*/
 static int parsing_startup_options_finished;
 /*----------------------------------------------------------------------------*/
@@ -81,10 +80,12 @@ static int parsing_startup_options_finished;
 static const struct argp_option argp_common_options[] =
 	{
 	{OPT_LONG_CACHE_SIZE, OPT_CACHE_SIZE, "SIZE", 0,
-		"The maximal number of nodes in the node cache"}
+		"The maximal number of nodes in the node cache"},
+	{OPT_LONG_PROPERTY, OPT_PROPERTY, "PROPERTY", 0,
+		"The command which will act as a filter"}
 	};
 /*----------------------------------------------------------------------------*/
-/*Argp options only meaningful for startup parsing*/
+/*Argp options only meaningful for startupp parsing*/
 static const struct argp_option argp_startup_options[] =
 	{
 	{0}
@@ -126,7 +127,10 @@ struct argp argp_runtime =
 struct argp argp_startup =
 	{0, 0, ARGS_DOC, DOC, argp_children_startup};
 /*----------------------------------------------------------------------------*/
-/*The directory to mirror*/
+/*The filtering command*/
+char * property = NULL;
+/*----------------------------------------------------------------------------*/
+/*The directory to filter*/
 char * dir = NULL;
 /*----------------------------------------------------------------------------*/
 
@@ -154,7 +158,16 @@ argp_parse_common_options
 			
 			break;
 			}
-		case ARGP_KEY_ARG: /*the directory to mirror*/
+		case OPT_PROPERTY:
+			{
+			/*try to duplicate the filtering command*/
+			property = strdup(arg);
+			if(!property)
+				error(EXIT_FAILURE, ENOMEM, "Could not strdup the property");
+				
+			break;
+			}
+		case ARGP_KEY_ARG: /*the directory to filter*/
 			{
 			/*try to duplicate the directory name*/
 			dir = strdup(arg);
@@ -172,7 +185,7 @@ argp_parse_common_options
 				/*put 0 instead*/
 				dir[i] = 0;
 				
-			LOG_MSG("argp_parse_common_options: Mirroring the directory %s.", dir);
+			LOG_MSG("argp_parse_common_options: Filtering the directory %s.", dir);
 
 			break;
 			}

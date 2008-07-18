@@ -37,7 +37,7 @@
 #include "node.h"
 #include "options.h"
 #include "lib.h"
-#include "nsmux.h"
+#include "filterfs.h"
 /*----------------------------------------------------------------------------*/
 
 /*----------------------------------------------------------------------------*/
@@ -311,6 +311,168 @@ node_entries_get
 	{
 	error_t err = 0;
 
+	/*Obtain the path to the current node*/
+	char * path_to_node = node->nn->lnode->path;
+	
+	/*The number of PROPERTY_PARAMs in the property*/
+	int param_entries_count = 0;
+	
+	/*The length of the property*/
+	size_t property_len = (property) ? (strlen(property)) : (0);
+	
+	/*The length of PROPERTY_PARAM*/
+	size_t property_param_len = strlen(PROPERTY_PARAM);
+
+	/*The full name and the filtering command*/
+	char * full_name = NULL, * cmd = NULL;
+
+	/*The lengths of the full name and the filtering command in chunks*/
+	size_t full_name_size = 1, cmd_size = 1;
+
+	/*If some property was indeed specified*/
+	if(property_len != 0)
+		{
+		/*the pointer to the current occurrence of PROPERTY_PARAM*/
+		char * occurrence = strstr(property, PROPERTY_PARAM);
+		
+		/*count the number of occurrences*/
+		for(; occurrence;
+			occurrence = strstr(occurrence + 1, PROPERTY_PARAM),
+			++param_entries_count);
+
+		/*try allocate the memory for the fullname and the filtering command*/
+		full_name = malloc(full_name_size * STRING_CHUNK);
+		if(!full_name)
+			return ENOMEM;
+
+		cmd = malloc(cmd_size * STRING_CHUNK);
+		if(!cmd)
+			{
+			free(full_name);
+			return ENOMEM;
+			}
+		}
+
+	/*Obtain the length of the path*/
+	size_t pathlen = strlen(path_to_node);
+
+	/*Checks if the given file satisfies the property. Zero value means that
+		the entry must be filtered out*/
+	int
+	check_property
+		(
+		const char * name	/*the name of the file*/
+		)
+		{
+		/*If there is no property*/
+		if(!property)
+			/*no filtering will be applied, any name is OK*/
+			return 0;
+		
+		/*Everything OK at first*/
+		err = 0;
+		
+		/*Compute the length of the full name once*/
+		size_t full_name_len = pathlen + 1 + strlen(name) + 1;
+
+		/*See how much space (in chunks) is required for the full name*/
+		int chunks = full_name_size;
+		for(; full_name_len > chunks * STRING_CHUNK; ++chunks);
+		
+		/*If more memory is requied*/
+		if(chunks > full_name_size)
+			{
+			/*free the old full name*/
+			free(full_name);
+
+			/*try to allocate the new memory*/
+			full_name = malloc(chunks * STRING_CHUNK);
+			if(!full_name)
+				{
+				err = ENOMEM;
+				free(cmd); /*the string for the command is definitely allocated here*/
+				return 0;
+				}
+			
+			/*store the new size*/
+			full_name_size = chunks;
+			}
+		
+		/*Initialize `full_name` as a valid string*/
+		full_name[0] = 0;
+		
+		/*Construct the full name*/
+		strcpy(full_name, path_to_node);
+		strcat(full_name, "/");
+		strcat(full_name, name);
+		
+		/*LOG_MSG("node_entries_get: Applying filter to %s...", full_name);*/
+		
+		/*Compute the space required for the final filtering command*/
+		size_t sz = property_len + (strlen(full_name) - property_param_len)
+			* param_entries_count;
+		
+		/*See how much space (in chunks) is required for the command*/
+		for(chunks = cmd_size; sz > chunks * STRING_CHUNK; ++chunks);
+		
+		/*If more memory is requied*/
+		if(chunks > cmd_size)
+			{
+			/*free the old command*/
+			free(cmd);
+
+			/*try to allocate the new memory*/
+			cmd = malloc(chunks * STRING_CHUNK);
+			if(!cmd)
+				{
+				err = ENOMEM;
+				free(full_name);	/*the string for the full name is
+														definitely allocated here*/
+				return 0;
+				}
+			
+			/*store the new size*/
+			cmd_size = chunks;
+			}
+
+		/*Initialize `cmd` as a valid string*/
+		cmd[0] = 0;
+			
+		/*The current occurence of PROPERTY_PARAM in property*/
+		char * p = strstr(property, PROPERTY_PARAM);
+		
+		/*The pointer to the current position in the property*/
+		char * propp = property;
+		
+		/*While the command has not been constructed*/
+		for(; p; p = strstr(propp, PROPERTY_PARAM))
+			{
+			/*add the new part of the property to the command*/
+			strncat(cmd, propp, p - propp);
+			
+			/*add the filename to the command*/
+			strcat(cmd, full_name);
+			
+			/*LOG_MSG("\tcmd = '%s'", cmd);*/
+
+			/*advance the pointer in the property*/
+			propp = p + property_param_len;
+
+			/*LOG_MSG("\tpropp points at '%s'", propp);*/
+			}
+		
+		/*Copy the rest of the property to the command*/
+		strcat(cmd, propp);
+		
+		/*LOG_MSG("node_entries_get: The filtering command: '%s'.", cmd);*/
+
+		/*Execute the command*/
+		int xcode = WEXITSTATUS(system(cmd));
+		
+		/*Return the exit code of the command*/
+		return xcode;
+		}/*check_property*/
+
 	/*The list of dirents*/
 	struct dirent ** dirent_list, **dirent;
 	
@@ -348,6 +510,9 @@ node_entries_get
 	/*The size of the current dirent*/
 	size_t size;
 	
+	/*The exit code of property*/
+	int good;
+	
 	/*Go through all elements of the list of pointers to dirent*/
 	for(dirent = dirent_list; *dirent; ++dirent)
 		{
@@ -356,6 +521,15 @@ node_entries_get
 		
 		/*If the current dirent is either '.' or '..', skip it*/
 		if((strcmp(name, ".") == 0) ||	(strcmp(name, "..") == 0))
+			continue;
+		
+		/*check if the current dirent has the property*/
+		good = check_property(name);
+		if(err)
+			break;
+ 		
+		/*If the current entry is not good, skip it*/
+		if(good != 0)
 			continue;
 		
 		/*obtain the length of the current name*/
@@ -407,6 +581,12 @@ node_entries_get
 	/*Free the results of listing the dirents*/
 	munmap(dirent_data, dirent_data_size);
 
+	/*Free the full name and the command (if these are present at all)*/
+	if(full_name)
+		free(full_name);
+	if(cmd)
+		free(cmd);
+	
 	/*Return the result of operations*/
 	return err;
 	}/*node_entries_get*/
@@ -463,7 +643,7 @@ node_update
 		return err;
 		}
 	
-	/*If the node looked up is actually the root node of the proxy filesystem*/
+	/*If the node looked up is actually the root node of filterfs filesystem*/
 	if
 		(
 		(stat.st_ino == underlying_node_stat.st_ino)
@@ -494,7 +674,7 @@ node_update
 	node->nn->flags &= ~FLAG_NODE_INVALIDATE;
 	node->nn->flags |= FLAG_NODE_ULFS_UPTODATE;
 	
-	/*Release the lock on the root node of proxy filesystem*/
+	/*Release the lock on the root node of filterfs filesystem*/
 	mutex_unlock(&netfs_root_node->lock);
 	
 	/*Return the result of operations*/

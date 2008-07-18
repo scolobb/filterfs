@@ -30,12 +30,18 @@
 /*--------Macros--------------------------------------------------------------*/
 /*The possible short options*/
 #define OPT_CACHE_SIZE 'c'
+/*the property according to which filtering will be performed*/
+#define OPT_PROPERTY	 'p'
 /*----------------------------------------------------------------------------*/
 /*The corresponding long options*/
 #define OPT_LONG_CACHE_SIZE "cache-size"
+#define OPT_LONG_PROPERTY 	"property"
 /*----------------------------------------------------------------------------*/
 /*Makes a long option out of option name*/
 #define OPT_LONG(o) "--"o
+/*----------------------------------------------------------------------------*/
+/*The substring of the property which shall be replaced by the filename*/
+#define PROPERTY_PARAM "{}"
 /*----------------------------------------------------------------------------*/
 
 /*----------------------------------------------------------------------------*/
@@ -49,7 +55,10 @@ extern struct argp argp_runtime;
 /*The number of nodes in cache (see ncache.{c,h})*/
 extern int ncache_size;
 /*----------------------------------------------------------------------------*/
-/*The directory to mirror*/
+/*The filtering command*/
+extern char * property;
+/*----------------------------------------------------------------------------*/
+/*The directory to filter*/
 extern char * dir;
 /*----------------------------------------------------------------------------*/
 #endif /*__OPTIONS_H__*/

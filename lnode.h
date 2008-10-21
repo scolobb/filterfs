@@ -133,11 +133,4 @@ lnode_install
 	lnode_t * node	/*install this*/
 	);
 /*----------------------------------------------------------------------------*/
-/*Unistall the node from the node tree; remove a reference from the lnode*/
-void
-lnode_uninstall
-	(
-	lnode_t * node
-	);
-/*----------------------------------------------------------------------------*/
 #endif /*__LNODE_H__*/

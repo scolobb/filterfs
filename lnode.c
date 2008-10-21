@@ -61,9 +61,7 @@ lnode_ref_remove
 	/*If there are no references remaining*/
 	if(node->references == 0)
 		{
-		/*uninstall the node from the directory it is in and destroy it*/
-		lnode_uninstall(node);
-		lnode_destroy(node);
+		/*TODO: destroy the lnode*/
 		}
 	else
 		/*simply unlock the node*/
@@ -281,25 +279,4 @@ lnode_install
 	/*Setup the `dir` link in node*/
 	node->dir = dir;
 	}/*lnode_install*/
-/*----------------------------------------------------------------------------*/
-/*Unistall the node from the node tree; remove a reference from the lnode
-	containing `node`*/
-void
-lnode_uninstall
-	(
-	lnode_t * node
-	)
-	{
-	/*Remove a reference from the parent*/
-	lnode_ref_remove(node->dir);
-	
-	/*Make the next pointer in the previous element point to the element,
-		which follows `node`*/
-	*node->prevp = node->next;
-
-	/*If the current node is not the last one, connect the list after removal
-		of the current node*/
-	if(node->next)
-		node->next->prevp = &node->next;
-	}/*lnode_uninstall*/
 /*----------------------------------------------------------------------------*/
